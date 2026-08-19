@@ -1,0 +1,96 @@
+* {
+    box-sizing: border-box;
+}
+
+html {
+    min-height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+    padding: 25px;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+}
+
+.tab-active {
+    background: #4f46e5;
+    color: #ffffff;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.schedule-table th,
+.schedule-table td {
+    border: 1px solid #e5e7eb;
+    padding: 8px;
+    text-align: center;
+}
+
+.schedule-cell {
+    position: relative;
+    height: 40px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.schedule-cell.empty:hover {
+    background: #e0e7ff;
+}
+
+.schedule-cell.filled {
+    background: #ede9fe;
+}
+
+.schedule-cell.filled:hover .delete-schedule {
+    display: block;
+}
+
+.delete-schedule {
+    display: none;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border: 0;
+    border-radius: 50%;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 16px;
+    cursor: pointer;
+}
+
+input,
+select,
+button {
+    font: inherit;
+}
+
+button:disabled,
+select:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+@media (max-width: 640px) {
+    body {
+        padding: 12px;
+    }
+
+    .schedule-table th,
+    .schedule-table td {
+        padding: 5px;
+        font-size: 0.85rem;
+    }
+}
