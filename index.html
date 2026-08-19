@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة مُعلم برو السحابية</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .tab-active {
+            background-color: #4f46e5;
+            color: white;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="auth-screen" class="flex items-center justify-center min-h-screen bg-indigo-100">
+        <div class="bg-white p-8 rounded shadow-md w-full max-w-md text-center">
+            <h1 class="text-2xl font-bold mb-6 text-indigo-700">منصة مُعلم برو</h1>
+            <p class="text-gray-500 mb-4">سجل الدخول للوصول إلى صفوفك وبياناتك</p>
+
+            <input type="email" id="email" placeholder="البريد الإلكتروني"
+                   class="border p-2 rounded w-full mb-3 text-right">
+
+            <input type="password" id="password" placeholder="كلمة المرور"
+                   class="border p-2 rounded w-full mb-4 text-right">
+
+            <button onclick="login()"
+                    class="bg-indigo-600 text-white w-full py-2 rounded hover:bg-indigo-700 mb-2">
+                تسجيل الدخول
+            </button>
+
+            <button onclick="signup()"
+                    class="bg-green-600 text-white w-full py-2 rounded hover:bg-green-700 mb-4">
+                إنشاء حساب جديد
+            </button>
+
+            <hr class="my-4">
+
+            <button onclick="loginWithGoogle()"
+                    class="bg-white border border-gray-300 text-gray-700 w-full py-2 rounded hover:bg-gray-50 flex items-center justify-center">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                     class="w-5 h-5 ml-2" alt="Google">
+                الدخول بحساب جوجل
+            </button>
+        </div>
+    </div>
+
+    <header class="bg-indigo-700 text-white p-4 shadow-md hidden" id="app-header">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">منصة مُعلم برو</h1>
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <span id="user-info" class="text-sm"></span>
+                <button onclick="logout()"
+                        class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded">
+                    تسجيل الخروج
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <nav class="bg-white shadow-sm mb-6 hidden" id="app-nav">
+        <div class="container mx-auto flex flex-wrap p-2 space-x-2 space-x-reverse">
+            <button onclick="showTab('classes')" id="tab-classes"
+                    class="px-4 py-2 rounded hover:bg-indigo-100 tab-active">
+                الصفوف والطلاب
+            </button>
+            <button onclick="showTab('schedule')" id="tab-schedule"
+                    class="px-4 py-2 rounded hover:bg-indigo-100">
+                الجدول الأسبوعي
+            </button>
+            <button onclick="showTab('session')" id="tab-session"
+                    class="px-4 py-2 rounded hover:bg-indigo-100">
+                تسجيل الحصة والحضور
+            </button>
+            <button onclick="showTab('reports')" id="tab-reports"
+                    class="px-4 py-2 rounded hover:bg-indigo-100">
+                تقارير الحصص
+            </button>
+            <button onclick="showTab('files')" id="tab-files"
+                    class="px-4 py-2 rounded hover:bg-indigo-100">
+                مركز الملفات
+            </button>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 pb-10 hidden" id="app-main">
+
+        <section id="classes" class="bg-white p-6 rounded shadow">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">إدارة الصفوف</h2>
+
+            <div class="flex space-x-2 space-x-reverse mb-4">
+                <input type="text" id="className"
+                       placeholder="اسم الصف (مثال: الصف الأول الثانوي)"
+                       class="border p-2 rounded w-full">
+
+                <button onclick="addClass()"
+                        class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
+                    إضافة
+                </button>
+            </div>
+
+            <div id="classesList" class="space-y-4"></div>
+        </section>
+
+        <section id="schedule" class="bg-white p-6 rounded shadow hidden">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">مساعد الجدول الأسبوعي</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <select id="schClass" class="border p-2 rounded"></select>
+
+                <select id="schDay" class="border p-2 rounded">
+                    <option value="الأحد">الأحد</option>
+                    <option value="الإثنين">الإثنين</option>
+                    <option value="الثلاثاء">الثلاثاء</option>
+                    <option value="الأربعاء">الأربعاء</option>
+                    <option value="الخميس">الخميس</option>
+                </select>
+
+                <input type="time" id="schTime" class="border p-2 rounded">
+            </div>
+
+            <button onclick="addSchedule()"
+                    class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mb-4">
+                إضافة موعد
+            </button>
+
+            <div id="scheduleList" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+        </section>
+
+        <section id="session" class="bg-white p-6 rounded shadow hidden">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">تسجيل الحصة الحالية</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block mb-1">اختر الصف</label>
+                    <select id="sessClass"
+                            onchange="loadStudentsForAttendance()"
+                            class="border p-2 rounded w-full"></select>
+                </div>
+
+                <div>
+                    <label class="block mb-1">تاريخ الحصة</label>
+                    <input type="date" id="sessDate"
+                           class="border p-2 rounded w-full">
+                </div>
+
+                <div>
+                    <label class="block mb-1">مدة الحصة (دقائق)</label>
+                    <input type="number" id="sessDuration"
+                           min="1" max="1440"
+                           placeholder="مثال: 60"
+                           class="border p-2 rounded w-full">
+                </div>
+
+                <div>
+                    <label class="block mb-1">اسم الدرس المشروح</label>
+                    <input type="text" id="sessLesson"
+                           placeholder="مثال: الفصل الأول - الخلايا"
+                           class="border p-2 rounded w-full">
+                </div>
+            </div>
+
+            <h3 class="font-bold mb-2">تسجيل الحضور:</h3>
+            <div id="attendanceList"
+                 class="space-y-2 mb-4 max-h-60 overflow-y-auto border p-2 rounded"></div>
+
+            <button onclick="saveSessionReport()"
+                    class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                حفظ تقرير ما بعد الحصة
+            </button>
+        </section>
+
+        <section id="reports" class="bg-white p-6 rounded shadow hidden">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">تقارير ما بعد الحصة</h2>
+            <div id="reportsList" class="space-y-4"></div>
+        </section>
+
+        <section id="files" class="bg-white p-6 rounded shadow hidden">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">مركز الملفات والواجبات</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <select id="fileClass" class="border p-2 rounded"></select>
+
+                <select id="fileType" class="border p-2 rounded">
+                    <option value="كتاب">كتاب</option>
+                    <option value="عرض تقديمي">عرض تقديمي</option>
+                    <option value="ورقة عمل">ورقة عمل</option>
+                    <option value="واجب">واجب</option>
+                </select>
+
+                <input type="text" id="fileName"
+                       placeholder="اسم الملف"
+                       class="border p-2 rounded">
+
+                <input type="url" id="fileUrl"
+                       placeholder="رابط الملف"
+                       class="border p-2 rounded">
+            </div>
+
+            <button onclick="addFile()"
+                    class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mb-4">
+                رفع/إضافة
+            </button>
+
+            <div id="filesList" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+        </section>
+    </main>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAYpVq54c9bgyhn5yLXtLo89Gblw-2IqYU",
+            authDomain: "teacher-bro.firebaseapp.com",
+            projectId: "teacher-bro",
+            storageBucket: "teacher-bro.firebasestorage.app",
+            messagingSenderId: "631056398143",
+            appId: "1:631056398143:web:a7299c8ea3a20ea7aa058a"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const EMPTY_DB = {
+            classes: [],
+            schedules: [],
+            reports: [],
+            files: []
+        };
+
+        let DB = createEmptyDatabase();
+        let currentUser = null;
+        let saveQueue = Promise.resolve();
+
+        function createEmptyDatabase() {
+            return {
+                classes: [],
+                schedules: [],
+                reports: [],
+                files: []
+            };
+        }
+
+        function createId() {
+            if (window.crypto && crypto.randomUUID) {
+                return crypto.randomUUID();
+            }
+
+            return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function normalizeDatabase(data) {
+            const source = data && typeof data === 'object' ? data : {};
+
+            return {
+                classes: Array.isArray(source.classes)
+                    ? source.classes.map(cls => ({
+                        id: String(cls.id || createId()),
+                        name: String(cls.name || ''),
+                        students: Array.isArray(cls.students)
+                            ? cls.students.map(student => ({
+                                id: String(student.id || createId()),
+                                name: String(student.name || '')
+                            }))
+                            : []
+                    }))
+                    : [],
+
+                schedules: Array.isArray(source.schedules)
+                    ? source.schedules
+                        .filter(item => item && item.classId)
+                        .map(item => ({
+                            id: String(item.id || createId()),
+                            classId: String(item.classId),
+                            day: String(item.day || ''),
+                            time: String(item.time || '')
+                        }))
+                    : [],
+
+                reports: Array.isArray(source.reports)
+                    ? source.reports.map(report => ({
+                        id: String(report.id || createId()),
+                        classId: String(report.classId || ''),
+                        className: String(report.className || ''),
+                        date: String(report.date || ''),
+                        duration: String(report.duration || ''),
+                        lesson: String(report.lesson || ''),
+                        attendees: Array.isArray(report.attendees)
+                            ? report.attendees.map(item => ({
+                                name: String(item.name || ''),
+                                eval: String(item.eval || 'لم يتم التقييم')
+                            }))
+                            : [],
+                        absentees: Array.isArray(report.absentees)
+                            ? report.absentees.map(name => String(name))
+                            : []
+                    }))
+                    : [],
+
+                files: Array.isArray(source.files)
+                    ? source.files.map(file => ({
+                        id: String(file.id || createId()),
+                        classId: String(file.classId || ''),
+                        type: String(file.type || ''),
+                        name: String(file.name || ''),
+                        url: String(file.url || '')
+                    }))
+                    : []
+            };
+        }
+
+        function showError(error) {
+            console.error(error);
+            alert("حدث خطأ: " + (error.message || error));
+        }
+
+        function getToday() {
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function login() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                return alert("الرجاء إدخال البريد الإلكتروني وكلمة المرور");
+            }
+
+            auth.signInWithEmailAndPassword(email, password).catch(showError);
+        }
+
+        function signup() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                return alert("الرجاء إدخال البريد الإلكتروني وكلمة المرور");
+            }
+
+            if (password.length < 6) {
+                return alert("يجب أن تتكون كلمة المرور من 6 أحرف على الأقل");
+            }
+
+            auth.createUserWithEmailAndPassword(email, password).catch(showError);
+        }
+
+        function loginWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(showError);
+        }
+
+        function logout() {
+            auth.signOut().catch(showError);
+        }
+
+        auth.onAuthStateChanged(async user => {
+            if (!user) {
+                currentUser = null;
+                DB = createEmptyDatabase();
+
+                document.getElementById('auth-screen').classList.remove('hidden');
+                document.getElementById('app-header').classList.add('hidden');
+                document.getElementById('app-nav').classList.add('hidden');
+                document.getElementById('app-main').classList.add('hidden');
+                return;
+            }
+
+            currentUser = user;
+
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-header').classList.remove('hidden');
+            document.getElementById('app-nav').classList.remove('hidden');
+            document.getElementById('app-main').classList.remove('hidden');
+
+            document.getElementById('user-info').textContent =
+                `مرحباً، ${user.displayName || user.email}`;
+
+            document.getElementById('sessDate').value = getToday();
+
+            await loadData();
+        });
+
+        async function loadData() {
+            if (!currentUser) return;
+
+            try {
+                const docRef = db.collection('users').doc(currentUser.uid);
+                const snapshot = await docRef.get();
+
+                if (snapshot.exists && snapshot.data().db) {
+                    DB = normalizeDatabase(snapshot.data().db);
+                } else {
+                    DB = createEmptyDatabase();
+                    await docRef.set({ db: DB });
+                }
+
+                renderAll();
+            } catch (error) {
+                showError(error);
+            }
+        }
+
+        function saveData() {
+            if (!currentUser) return Promise.resolve();
+
+            const dataToSave = JSON.parse(JSON.stringify(DB));
+
+            saveQueue = saveQueue
+                .catch(() => {})
+                .then(() =>
+                    db.collection('users')
+                        .doc(currentUser.uid)
+                        .set({ db: dataToSave })
+                )
+                .catch(error => {
+                    showError(error);
+                    throw error;
+                });
+
+            return saveQueue;
+        }
+
+        function showTab(tabName) {
+            ['classes', 'schedule', 'session', 'reports', 'files'].forEach(tab => {
+                document.getElementById(tab).classList.add('hidden');
+                document.getElementById('tab-' + tab).classList.remove('tab-active');
+            });
+
+            document.getElementById(tabName).classList.remove('hidden');
+            document.getElementById('tab-' + tabName).classList.add('tab-active');
+
+            renderAll();
+        }
+
+        async function addClass() {
+            const input = document.getElementById('className');
+            const name = input.value.trim();
+
+            if (!name) {
+                return alert("الرجاء إدخال اسم الصف");
+            }
+
+            DB.classes.push({
+                id: createId(),
+                name,
+                students: []
+            });
+
+            input.value = '';
+            renderAll();
+
+            try {
+                await saveData();
+            } catch (_) {}
+        }
+
+        async function addStudent(classId) {
+            const name = prompt("الرجاء إدخال اسم الطالب الجديد:");
+
+            if (!name || !name.trim()) return;
+
+            const cls = DB.classes.find(item => item.id === classId);
+
+            if (!cls) {
+                return alert("الصف غير موجود");
+            }
+
+            cls.students.push({
+                id: createId(),
+                name: name.trim()
+            });
+
+            renderAll();
+
+            try {
+                await saveData();
+            } catch (_) {}
+        }
+
+        async function deleteClass(classId) {
+            if (!confirm("هل أنت متأكد من حذف الصف؟ سيتم حذف كل البيانات المرتبطة به.")) {
+                return;
+            }
+
+            DB.classes = DB.classes.filter(cls => cls.id !== classId);
+            DB.schedules = DB.schedules.filter(item => item.classId !== classId);
+            DB.reports = DB.reports.filter(item => item.classId !== classId);
+            DB.files = DB.files.filter(item => item.classId !== classId);
+
+            renderAll();
+
+            try {
+                await saveData();
+            } catch (_) {}
+        }
+
+        async function addSchedule() {
+            const classId = document.getElementById('schClass').value;
+            const day = document.getElementById('schDay').value;
+            const time = document.getElementById('schTime').value;
+
+            if (!classId || !time) {
+                return alert("الرجاء اختيار الصف والوقت");
+            }
+
+            DB.schedules.push({
+                id: createId(),
+                classId,
+                day,
+                time
+            });
+
+            document.getElementById('schTime').value = '';
+            renderAll();
+
+            try {
+                await saveData();
+            } catch (_) {}
+        }
+
+        function loadStudentsForAttendance() {
+            const classId = document.getElementById('sessClass').value;
+            const cls = DB.classes.find(item => item.id === classId);
+            const list = document.getElementById('attendanceList');
+
+            if (!cls) {
+                list.innerHTML = '<p class="text-gray-500">لا يوجد طلاب في هذا الصف</p>';
+                return;
+            }
+
+            if (!cls.students.length) {
+                list.innerHTML = '<p class="text-gray-500">لم تتم إضافة طلاب بعد</p>';
+                return;
+            }
+
+            list.innerHTML = cls.students.map(student => `
+                <div class="flex items-center justify-between p-2 border-b">
+                    <span>${escapeHtml(student.name)}</span>
+                    <div>
+                        <label class="ml-2 text-sm">
+                            حاضر
+                            <input type="radio"
+                                   name="att_${escapeHtml(student.id)}"
+                                   value="حاضر"
+                                   checked>
+                        </label>
+
+                        <label class="text-sm">
+                            غائب
+                            <input type="radio"
+                                   name="att_${escapeHtml(student.id)}"
+                                   value="غائب">
+                        </label>
+
+                        <input type="text"
+                               placeholder="التقييم"
+                               class="border rounded p-1 text-sm mr-2"
+                               id="eval_${escapeHtml(student.id)}">
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function saveSessionReport() {
+            const classId = document.getElementById('sessClass').value;
+            const date = document.getElementById('sessDate').value;
+            const duration = document.getElementById('sessDuration').value;
+            const lesson = document.getElementById('sessLesson').value.trim();
+
+            const cls = DB.classes.find(item => item.id === classId);
+
+            if (!cls) return alert("الرجاء اختيار الصف");
+            if (!date) return alert("الرجاء اختيار تاريخ الحصة");
+            if (!duration || Number(duration) <= 0) {
+                return alert("الرجاء إدخال مدة صحيحة للحصة");
+            }
+            if (!lesson) return alert("الرجاء إدخال اسم الدرس");
+
+            const attendees = [];
+            const absentees = [];
+
+            cls.students.forEach(student => {
+                const selected = document.querySelector(
+                    `input[name="att_${CSS.escape(student.id)}"]:checked`
+                );
+
+                const evaluationInput = document.getElementById(`eval_${student.id}`);
+                const evaluation = evaluationInput ? evaluationInput.value.trim() : '';
+
+                if (selected && selected.value === 'حاضر') {
+                    attendees.push({
+                        name: student.name,
+                        eval: evaluation || 'لم يتم التقييم'
+                    });
+                } else {
+                    absentees.push(student.name);
+                }
+            });
+
+            DB.reports.push({
+                id: createId(),
+                classId,
+                className: cls.name,
+                date,
+                duration,
+                lesson,
+                attendees,
+                absentees
+            });
+
+            document.getElementById('sessLesson').value = '';
+            document.getElementById('sessDuration').value = '';
+
+            renderAll();
+
+            try {
+                await saveData();
+                alert("تم حفظ التقرير بنجاح");
+            } catch (_) {}
+        }
+
+        async function addFile() {
+            const classId = document.getElementById('fileClass').value;
+            const type = document.getElementById('fileType').value;
+            const name = document.getElementById('fileName').value.trim();
+            const url = document.getElementById('fileUrl').value.trim();
+
+            if (!classId) return alert("الرجاء اختيار الصف");
+            if (!name || !url) return alert("الرجاء إدخال اسم الملف والرابط");
+
+            let parsedUrl;
+
+            try {
+                parsedUrl = new URL(url);
+            } catch (_) {
+                return alert("الرجاء إدخال رابط صحيح");
+            }
+
+            if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+                return alert("يسمح فقط بروابط HTTP و HTTPS");
+            }
+
+            DB.files.push({
+                id: createId(),
+                classId,
+                type,
+                name,
+                url: parsedUrl.href
+            });
+
+            document.getElementById('fileName').value = '';
+            document.getElementById('fileUrl').value = '';
+
+            renderAll();
+
+            try {
+                await saveData();
+            } catch (_) {}
+        }
+
+        function renderAll() {
+            renderClasses();
+            renderDropdowns();
+            renderSchedule();
+            renderReports();
+            renderFiles();
+            loadStudentsForAttendance();
+        }
+
+        function renderClasses() {
+            const list = document.getElementById('classesList');
+
+            list.innerHTML = DB.classes.map(cls => `
+                <div class="border p-4 rounded shadow-sm flex justify-between items-center">
+                    <div>
+                        <h3 class="font-bold text-lg text-indigo-700">
+                            ${escapeHtml(cls.name)}
+                        </h3>
+
+                        <div class="text-sm text-gray-600 mt-1">
+                            <strong>الطلاب:</strong>
+                            ${
+                                cls.students.map(student => escapeHtml(student.name)).join('، ')
+                                || 'لا يوجد'
+                            }
+                        </div>
+                    </div>
+
+                    <div>
+                        <button onclick="addStudent('${escapeHtml(cls.id)}')"
+                                class="bg-green-500 text-white text-sm px-2 py-1 rounded mb-2">
+                            + طالب
+                        </button>
+
+                        <button onclick="deleteClass('${escapeHtml(cls.id)}')"
+                                class="bg-red-500 text-white text-sm px-2 py-1 rounded">
+                            حذف الصف
+                        </button>
+                    </div>
+                </div>
+            `).join('') || '<p>لا توجد صفوف مضافة</p>';
+        }
+
+        function renderDropdowns() {
+            const selects = ['schClass', 'sessClass', 'fileClass'];
+
+            const options = DB.classes.length
+                ? DB.classes.map(cls =>
+                    `<option value="${escapeHtml(cls.id)}">${escapeHtml(cls.name)}</option>`
+                ).join('')
+                : '<option value="">لا توجد صفوف مضافة</option>';
+
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                const previousValue = select.value;
+
+                select.innerHTML = options;
+
+                if (DB.classes.some(cls => cls.id === previousValue)) {
+                    select.value = previousValue;
+                }
+            });
+        }
+
+        function renderSchedule() {
+            const list = document.getElementById('scheduleList');
+            const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+
+            list.innerHTML = days.map(day => {
+                const daySchedules = DB.schedules.filter(item => item.day === day);
+
+                return `
+                    <div class="border p-3 rounded">
+                        <h4 class="font-bold mb-2 text-indigo-600">
+                            ${escapeHtml(day)}
+                        </h4>
+
+                        ${
+                            daySchedules.map(schedule => {
+                                const cls = DB.classes.find(
+                                    item => item.id === schedule.classId
+                                );
+
+                                return `
+                                    <div class="text-sm bg-gray-100 p-2 rounded mb-1">
+                                        ${escapeHtml(schedule.time)} -
+                                        ${escapeHtml(cls ? cls.name : 'صف محذوف')}
+                                    </div>
+                                `;
+                            }).join('')
+                            || '<div class="text-sm text-gray-400">لا توجد حصص</div>'
+                        }
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderReports() {
+            const list = document.getElementById('reportsList');
+
+            list.innerHTML = DB.reports.map(report => {
+                const attendees = Array.isArray(report.attendees)
+                    ? report.attendees
+                    : [];
+
+                const absentees = Array.isArray(report.absentees)
+                    ? report.absentees
+                    : [];
+
+                return `
+                    <div class="border p-4 rounded shadow-sm bg-gray-50">
+                        <h3 class="font-bold text-lg text-indigo-700">
+                            تقرير: ${escapeHtml(report.className)}
+                        </h3>
+
+                        <div class="grid grid-cols-2 gap-2 text-sm mt-2 mb-2">
+                            <span>
+                                <strong>التاريخ:</strong>
+                                ${escapeHtml(report.date)}
+                            </span>
+
+                            <span>
+                                <strong>المدة:</strong>
+                                ${escapeHtml(report.duration)} دقيقة
+                            </span>
+
+                            <span class="col-span-2">
+                                <strong>الدرس:</strong>
+                                ${escapeHtml(report.lesson)}
+                            </span>
+                        </div>
+
+                        <div class="mt-2">
+                            <strong>الحضور:</strong>
+                            <ul class="list-disc pr-5 text-sm mt-1">
+                                ${
+                                    attendees.map(item =>
+                                        `<li>${escapeHtml(item.name)} - ${escapeHtml(item.eval)}</li>`
+                                    ).join('')
+                                    || '<li>لا يوجد</li>'
+                                }
+                            </ul>
+                        </div>
+
+                        <div class="mt-2 text-sm text-red-500">
+                            <strong>الغائبون:</strong>
+                            ${
+                                absentees.map(name => escapeHtml(name)).join('، ')
+                                || 'لا يوجد'
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<p>لا توجد تقارير بعد</p>';
+        }
+
+        function renderFiles() {
+            const list = document.getElementById('filesList');
+
+            list.innerHTML = DB.files.map(file => {
+                const cls = DB.classes.find(item => item.id === file.classId);
+
+                const colors = {
+                    'كتاب': 'bg-blue-100 text-blue-800',
+                    'عرض تقديمي': 'bg-purple-100 text-purple-800',
+                    'ورقة عمل': 'bg-yellow-100 text-yellow-800',
+                    'واجب': 'bg-red-100 text-red-800'
+                };
+
+                const colorClass = colors[file.type] || 'bg-gray-100 text-gray-800';
+
+                return `
+                    <div class="border p-4 rounded shadow-sm">
+                        <span class="text-xs font-bold px-2 py-1 rounded ${colorClass}">
+                            ${escapeHtml(file.type)}
+                        </span>
+
+                        <h4 class="font-bold mt-2">
+                            ${escapeHtml(file.name)}
+                        </h4>
+
+                        <p class="text-xs text-gray-500 mb-2">
+                            ${escapeHtml(cls ? cls.name : 'صف محذوف')}
+                        </p>
+
+                        <a href="${escapeHtml(file.url)}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-indigo-600 text-sm hover:underline">
+                            فتح الملف
+                        </a>
+                    </div>
+                `;
+            }).join('') || '<p>لا توجد ملفات مضافة</p>';
+        }
+    </script>
+</body>
+</html>
