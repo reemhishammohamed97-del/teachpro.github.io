@@ -1,0 +1,100 @@
+body {
+    min-height: 100vh;
+    background-color: #f3f4f6;
+}
+
+.tab-active {
+    background-color: #e0e7ff;
+    color: #4338ca;
+    font-weight: 700;
+}
+
+.schedule-table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    background-color: #ffffff;
+}
+
+.schedule-table th,
+.schedule-table td {
+    border: 1px solid #d1d5db;
+    padding: 0.5rem;
+    min-width: 105px;
+}
+
+.schedule-table th:first-child,
+.schedule-table td:first-child {
+    min-width: 85px;
+    white-space: nowrap;
+}
+
+.schedule-cell {
+    height: 58px;
+    vertical-align: middle;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.schedule-cell.empty {
+    cursor: pointer;
+}
+
+.schedule-cell.empty:hover {
+    background-color: #dcfce7;
+    transform: scale(1.03);
+}
+
+.schedule-cell.filled {
+    position: relative;
+    cursor: pointer;
+    background-color: #e0e7ff;
+}
+
+.schedule-cell.filled:hover {
+    background-color: #fecaca;
+}
+
+.delete-schedule {
+    position: absolute;
+    top: 2px;
+    left: 6px;
+    color: #dc2626;
+    font-size: 1.25rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+input,
+select,
+textarea,
+button {
+    font-family: inherit;
+}
+
+button {
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+@media (max-width: 640px) {
+    body {
+        padding: 0;
+    }
+
+    .schedule-table {
+        min-width: 760px;
+    }
+
+    .schedule-table th,
+    .schedule-table td {
+        padding: 0.35rem;
+        min-width: 90px;
+        font-size: 0.8rem;
+    }
+}
