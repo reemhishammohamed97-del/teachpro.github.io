@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+          rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+
+    <title>منصة مُعلم برو السحابية</title>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+
+<body class="text-gray-800">
+
+<div id="auth-screen" class="flex items-center justify-center min-h-screen bg-indigo-100">
+    <div class="bg-white p-8 rounded shadow-md w-full max-w-md text-center">
+        <h1 class="text-2xl font-bold mb-6 text-indigo-700">منصة مُعلم برو</h1>
+        <p class="text-gray-500 mb-4">سجل الدخول للوصول إلى صفوفك وبياناتك</p>
+
+        <input type="email" id="email" placeholder="البريد الإلكتروني"
+               class="border p-2 rounded w-full mb-3 text-right">
+
+        <input type="password" id="password" placeholder="كلمة المرور"
+               class="border p-2 rounded w-full mb-4 text-right">
+
+        <button onclick="login()" class="bg-indigo-600 text-white w-full py-2 rounded hover:bg-indigo-700 mb-2">
+            تسجيل الدخول
+        </button>
+
+        <button onclick="signup()" class="bg-green-600 text-white w-full py-2 rounded hover:bg-green-700 mb-4">
+            إنشاء حساب جديد
+        </button>
+
+        <hr class="my-4">
+
+        <button onclick="loginWithGoogle()"
+                class="bg-white border border-gray-300 text-gray-700 w-full py-2 rounded hover:bg-gray-50 flex items-center justify-center">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                 class="w-5 h-5 ml-2" alt="Google">
+            الدخول بحساب جوجل
+        </button>
+    </div>
+</div>
+
+<header id="app-header" class="bg-indigo-700 text-white p-4 shadow-md hidden">
+    <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-2xl font-bold">منصة مُعلم برو</h1>
+        <div class="flex items-center space-x-3 space-x-reverse">
+            <span id="user-info" class="text-sm"></span>
+            <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded">
+                تسجيل الخروج
+            </button>
+        </div>
+    </div>
+</header>
+
+<nav id="app-nav" class="bg-white shadow-sm mb-6 hidden">
+    <div class="container mx-auto flex flex-wrap p-2 space-x-2 space-x-reverse">
+        <button onclick="showTab('classes')" id="tab-classes"
+                class="px-4 py-2 rounded hover:bg-indigo-100 tab-active">الصفوف والطلاب</button>
+        <button onclick="showTab('schedule')" id="tab-schedule"
+                class="px-4 py-2 rounded hover:bg-indigo-100">الجدول الأسبوعي</button>
+        <button onclick="showTab('session')" id="tab-session"
+                class="px-4 py-2 rounded hover:bg-indigo-100">تسجيل الحصة والحضور</button>
+        <button onclick="showTab('reports')" id="tab-reports"
+                class="px-4 py-2 rounded hover:bg-indigo-100">تقارير الحصص</button>
+        <!-- تبويب عدد الحصص الجديد -->
+        <button onclick="showTab('sessionCounts')" id="tab-sessionCounts"
+                class="px-4 py-2 rounded hover:bg-indigo-100">عدد الحصص</button>
+        <button onclick="showTab('files')" id="tab-files"
+                class="px-4 py-2 rounded hover:bg-indigo-100">مركز الملفات</button>
+    </div>
+</nav>
+
+<main id="app-main" class="container mx-auto px-4 pb-10 hidden">
+    <section id="classes" class="bg-white p-6 rounded shadow">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">إدارة المجموعات والطلاب</h2>
+        <div class="mb-6 text-center">
+            <button onclick="openAddModal()" class="bg-indigo-600 text-white px-6 py-3 rounded hover:bg-indigo-700 font-bold shadow-md">
+                ➕ إضافة طالب / مجموعة جديدة
+            </button>
+        </div>
+        <div id="classesList" class="space-y-4"></div>
+    </section>
+
+    <section id="schedule" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">الجدول الأسبوعي</h2>
+        <div class="mb-4 p-3 bg-indigo-50 rounded flex items-center space-x-2 space-x-reverse">
+            <label class="font-bold text-sm whitespace-nowrap">اختر الصف لإضافته:</label>
+            <select id="schClass" class="border p-2 rounded flex-1"></select>
+        </div>
+        <p class="text-sm text-gray-500 mb-4">
+            اضغط على (+) لإضافة الحصة، واضغط على الحصة المضافة لحذفها.
+        </p>
+        <div class="overflow-x-auto">
+            <div id="scheduleTableContainer"></div>
+        </div>
+    </section>
+
+    <section id="session" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">تسجيل الحصة الحالية</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block mb-1">اختر الصف</label>
+                <select id="sessClass" onchange="loadStudentsForAttendance()"
+                        class="border p-2 rounded w-full"></select>
+            </div>
+            <div>
+                <label class="block mb-1">تاريخ الحصة</label>
+                <input type="date" id="sessDate" class="border p-2 rounded w-full">
+            </div>
+            <div>
+                <label class="block mb-1">مدة الحصة بالدقائق</label>
+                <input type="number" id="sessDuration" min="1"
+                       placeholder="مثال: 60" class="border p-2 rounded w-full">
+            </div>
+            <div>
+                <label class="block mb-1">اسم الدرس المشروح</label>
+                <input type="text" id="sessLesson" placeholder="مثال: الفصل الأول"
+                       class="border p-2 rounded w-full">
+            </div>
+        </div>
+        <h3 class="font-bold mb-2">تسجيل الحضور:</h3>
+        <div id="attendanceList"
+             class="space-y-2 mb-4 max-h-60 overflow-y-auto border p-2 rounded"></div>
+        <button onclick="saveSessionReport()"
+                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+            حفظ تقرير ما بعد الحصة
+        </button>
+    </section>
+
+    <section id="reports" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">تقارير ما بعد الحصة</h2>
+        <div id="reportsList" class="space-y-4"></div>
+    </section>
+
+    <!-- ================= قسم عدد الحصص الجديد ================= -->
+    <section id="sessionCounts" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">عدد الحصص</h2>
+        
+        <div class="flex space-x-2 space-x-reverse mb-6">
+            <input type="text" id="sessionTrackerName" placeholder="اسم الطالب أو المجموعة"
+                   class="border p-2 rounded w-full">
+            <button onclick="addSessionTracker()"
+                    class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 whitespace-nowrap">
+                ➕ إضافة
+            </button>
+        </div>
+
+        <div id="sessionTrackersList" class="space-y-4"></div>
+    </section>
+
+    <section id="files" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">مركز الملفات والواجبات</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <select id="fileClass" class="border p-2 rounded"></select>
+            <select id="fileType" class="border p-2 rounded">
+                <option value="كتاب">كتاب</option>
+                <option value="عرض تقديمي">عرض تقديمي</option>
+                <option value="ورقة عمل">ورقة عمل</option>
+                <option value="واجب">واجب</option>
+            </select>
+            <input type="text" id="fileName" placeholder="اسم الملف"
+                   class="border p-2 rounded">
+            <input type="url" id="fileUrl" placeholder="رابط الملف"
+                   class="border p-2 rounded">
+        </div>
+        <button onclick="addFile()"
+                class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mb-4">
+            رفع/إضافة
+        </button>
+        <div id="filesList" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+    </section>
+</main>
+
+<!-- ================= النافذة المنبثقة لإضافة طالب/مجموعة ================= -->
+<div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
+        <button onclick="closeAddModal()" class="absolute top-3 left-4 text-3xl text-gray-400 hover:text-red-500">&times;</button>
+        
+        <div id="modalStep1">
+            <h3 class="text-lg font-bold mb-6 text-center text-indigo-700">اختر نوع الإضافة</h3>
+            <div class="flex space-x-2 space-x-reverse">
+                <button onclick="showForm('student')" class="flex-1 border-2 border-indigo-600 text-indigo-600 rounded py-4 hover:bg-indigo-600 hover:text-white font-bold transition">طالب</button>
+                <button onclick="showForm('group')" class="flex-1 border-2 border-indigo-600 text-indigo-600 rounded py-4 hover:bg-indigo-600 hover:text-white font-bold transition">مجموعة</button>
+            </div>
+        </div>
+
+        <div id="modalStudentForm" class="hidden">
+            <h3 class="text-lg font-bold mb-4 text-center text-indigo-700">إضافة طالب جديد</h3>
+            <div class="space-y-3">
+                <input type="text" id="std_name" placeholder="اسم الطالب" class="border p-2 rounded w-full">
+                <input type="text" id="std_grade" placeholder="الصف الدراسي" class="border p-2 rounded w-full">
+                <select id="std_day" class="border p-2 rounded w-full">
+                    <option value="">اختر اليوم</option>
+                    <option>السبت</option><option>الأحد</option><option>الإثنين</option>
+                    <option>الثلاثاء</option><option>الأربعاء</option><option>الخميس</option><option>الجمعة</option>
+                </select>
+                <input type="time" id="std_time" class="border p-2 rounded w-full">
+                <input type="number" id="std_price" placeholder="سعر الحصة" class="border p-2 rounded w-full">
+                <select id="std_payment" class="border p-2 rounded w-full">
+                    <option value="session">الدفع بالحصة</option>
+                    <option value="month">الدفع بالشهر</option>
+                </select>
+                <button onclick="saveStudent()" class="bg-indigo-600 text-white w-full py-2 rounded hover:bg-indigo-700 font-bold">حفظ الطالب</button>
+                <button onclick="showForm('back')" class="text-gray-500 w-full py-1 text-sm">↩ رجوع</button>
+            </div>
+        </div>
+
+        <div id="modalGroupForm" class="hidden">
+            <h3 class="text-lg font-bold mb-4 text-center text-indigo-700">إضافة مجموعة جديدة</h3>
+            <div class="space-y-3">
+                <input type="text" id="grp_grade" placeholder="الصف الدراسي" class="border p-2 rounded w-full">
+                <input type="number" id="grp_count" placeholder="عدد الطلاب" class="border p-2 rounded w-full">
+                <select id="grp_day" class="border p-2 rounded w-full">
+                    <option value="">اختر اليوم</option>
+                    <option>السبت</option><option>الأحد</option><option>الإثنين</option>
+                    <option>الثلاثاء</option><option>الأربعاء</option><option>الخميس</option><option>الجمعة</option>
+                </select>
+                <input type="time" id="grp_time" class="border p-2 rounded w-full">
+                <input type="number" id="grp_price" placeholder="سعر الحصة للطالب الواحد" class="border p-2 rounded w-full">
+                <select id="grp_payment" class="border p-2 rounded w-full">
+                    <option value="session">الدفع بالحصة</option>
+                    <option value="month">الدفع بالشهر</option>
+                </select>
+                <button onclick="saveGroup()" class="bg-indigo-600 text-white w-full py-2 rounded hover:bg-indigo-700 font-bold">حفظ المجموعة</button>
+                <button onclick="showForm('back')" class="text-gray-500 w-full py-1 text-sm">↩ رجوع</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= النافذة المنبثقة لإضافة حصة للطالب/المجموعة ================= -->
+<div id="addSessionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
+        <button onclick="closeAddSessionModal()" class="absolute top-3 left-4 text-3xl text-gray-400 hover:text-red-500">&times;</button>
+        <h3 class="text-lg font-bold mb-4 text-center text-indigo-700">إضافة حصة جديدة</h3>
+        <div class="space-y-3">
+            <div>
+                <label class="block mb-1 text-sm font-bold">رقم الحصة</label>
+                <input type="number" id="newSessionNumber" placeholder="مثال: 1" class="border p-2 rounded w-full">
+            </div>
+            <div>
+                <label class="block mb-1 text-sm font-bold">تاريخ الحصة</label>
+                <input type="date" id="newSessionDate" class="border p-2 rounded w-full">
+            </div>
+            <div>
+                <label class="block mb-1 text-sm font-bold">وقت الحصة</label>
+                <input type="time" id="newSessionTime" class="border p-2 rounded w-full">
+            </div>
+            <button onclick="saveNewSession()" class="bg-indigo-600 text-white w-full py-2 rounded hover:bg-indigo-700 font-bold mt-2">حفظ الحصة</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const firebaseConfig = {
+    apiKey: "AIzaSyAYpVq54c9bgyhn5yLXtLo89Gblw-2IqYU",
+    authDomain: "teacher-bro.firebaseapp.com",
+    projectId: "teacher-bro",
+    storageBucket: "teacher-bro.firebasestorage.app",
+    messagingSenderId: "631056398143",
+    appId: "1:631056398143:web:a7299c8ea3a20ea7aa058a"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// تم إضافة sessionTrackers لحفظ بيانات عدد الحصص
+const emptyDB = () => ({ classes: [], schedules: [], reports: [], sessionTrackers: [], files: [] });
+let DB = emptyDB();
+let currentUser = null;
+let saveQueue = Promise.resolve();
+let currentTrackerId = null; // متغير لتتبع أي طالب/مجموعة نضيف لها الحصة
+
+function newId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+function clean(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[char]));
+}
+
+function encodeArgument(value) { return encodeURIComponent(String(value ?? '')); }
+function decodeArgument(value) { return decodeURIComponent(value); }
+
+function validHttpUrl(value) {
+    try {
+        const url = new URL(String(value));
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+    } catch { return null; }
+}
+
+function normalizeClass(item) {
+    const students = Array.isArray(item?.students) ? item.students : [];
+    return {
+        id: String(item?.id || newId()),
+        name: String(item?.name || '').trim(),
+        type: String(item?.type || 'group'),
+        grade: String(item?.grade || '').trim(),
+        day: String(item?.day || ''),
+        time: String(item?.time || ''),
+        price: Number(item?.price) || 0,
+        paymentMethod: String(item?.paymentMethod || 'session'),
+        studentCount: Number(item?.studentCount) || 0,
+        students: students.map(student => ({ id: String(student?.id || newId()), name: String(student?.name || '').trim() })).filter(student => student.name)
+    };
+}
+
+// دالة تنظيف بيانات متتبع الحصص
+function normalizeSessionTracker(item) {
+    const sessions = Array.isArray(item?.sessions) ? item.sessions : [];
+    return {
+        id: String(item?.id || newId()),
+        name: String(item?.name || '').trim(),
+        sessions: sessions.map(s => ({
+            id: String(s?.id || newId()),
+            number: Number(s?.number) || 0,
+            date: String(s?.date || ''),
+            time: String(s?.time || '')
+        })).filter(s => s.date && s.time && s.number)
+    };
+    if (tracker.sessions.some(session => session.number === Number(number))) {
+    alert('رقم الحصة موجود بالفعل');
+    return;
+}
+}
+
+function normalizeSchedule(item) { return { id: String(item?.id || newId()), classId: String(item?.classId || ''), day: String(item?.day || ''), time: String(item?.time || '') }; }
+
+function normalizeReport(item) {
+    return {
+        id: String(item?.id || newId()),
+        classId: String(item?.classId || ''),
+        className: String(item?.className || '').trim(),
+        date: String(item?.date || ''),
+        duration: Number(item?.duration) || 0,
+        lesson: String(item?.lesson || '').trim(),
+        attendees: Array.isArray(item?.attendees) ? item.attendees.map(person => ({ name: String(person?.name || ''), eval: String(person?.eval || 'لم يتم التقييم') })).filter(person => person.name) : [],
+        absentees: Array.isArray(item?.absentees) ? item.absentees.map(name => String(name || '')).filter(Boolean) : []
+    };
+}
+
+function normalizeFile(item) { return { id: String(item?.id || newId()), classId: String(item?.classId || ''), type: String(item?.type || 'ملف'), name: String(item?.name || '').trim(), url: validHttpUrl(item?.url) || '' }; }
+
+function normalizeDB(data) {
+    const source = data || {};
+    const classes = Array.isArray(source.classes) ? source.classes.map(normalizeClass).filter(cls => cls.name) : [];
+    const classIds = new Set(classes.map(cls => cls.id));
+    return {
+        classes,
+        schedules: Array.isArray(source.schedules) ? source.schedules.map(normalizeSchedule).filter(item => classIds.has(item.classId) && item.day && item.time) : [],
+        reports: Array.isArray(source.reports) ? source.reports.map(normalizeReport).filter(item => classIds.has(item.classId) && item.date) : [],
+        // تنظيم متتبعات الحصص
+        sessionTrackers: Array.isArray(source.sessionTrackers) ? source.sessionTrackers.map(normalizeSessionTracker).filter(t => t.name) : [],
+        files: Array.isArray(source.files) ? source.files.map(normalizeFile).filter(item => classIds.has(item.classId) && item.name && item.url) : []
+    };
+}
+
+function login() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || !password) { alert('يرجى إدخال البريد الإلكتروني وكلمة المرور'); return; }
+    auth.signInWithEmailAndPassword(email, password).catch(error => alert('خطأ: ' + error.message));
+}
+
+function signup() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || password.length < 6) { alert('أدخل بريداً صحيحاً وكلمة مرور من 6 أحرف على الأقل'); return; }
+    auth.createUserWithEmailAndPassword(email, password).catch(error => alert('خطأ: ' + error.message));
+}
+
+function loginWithGoogle() { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(error => alert('خطأ: ' + error.message)); }
+function logout() { auth.signOut().catch(error => alert('تعذر تسجيل الخروج: ' + error.message)); }
+
+auth.onAuthStateChanged(async user => {
+    currentUser = user;
+    document.getElementById('auth-screen').classList.toggle('hidden', !!user);
+    document.getElementById('app-header').classList.toggle('hidden', !user);
+    document.getElementById('app-nav').classList.toggle('hidden', !user);
+    document.getElementById('app-main').classList.toggle('hidden', !user);
+
+    if (!user) { DB = emptyDB(); saveQueue = Promise.resolve(); return; }
+    document.getElementById('user-info').textContent = `مرحباً، ${user.displayName || user.email}`;
+    try { await loadData(user.uid); } catch (error) { console.error(error); alert('تعذر تحميل البيانات'); }
+});
+
+async function loadData(uid = currentUser?.uid) {
+    if (!uid) return;
+    const reference = db.collection('users').doc(uid);
+    const snapshot = await reference.get();
+    if (currentUser?.uid !== uid) return;
+
+    if (snapshot.exists && snapshot.data()?.db) {
+        DB = normalizeDB(snapshot.data().db);
+    } else {
+        DB = emptyDB();
+        await reference.set({ db: DB });
+    }
+    renderAll();
+}
+
+function saveData() {
+    if (!currentUser) return Promise.reject(new Error('لا يوجد مستخدم مسجل الدخول'));
+    const uid = currentUser.uid;
+    const dataToSave = clone(DB);
+    saveQueue = saveQueue.catch(() => {}).then(() => {
+        if (!currentUser || currentUser.uid !== uid) throw new Error('تغير المستخدم أثناء الحفظ');
+        return db.collection('users').doc(uid).set({ db: dataToSave });
+    });
+    return saveQueue;
+}
+
+async function commit(change, renderer = renderAll) {
+    const previousDB = clone(DB);
+    try { change(); await saveData(); renderer(); return true; } 
+    catch (error) { console.error(error); DB = previousDB; renderer(); alert('تعذر حفظ البيانات. تم إلغاء التغيير.'); return false; }
+}
+
+// تم تحديث التبويبات لتشمل sessionCounts
+function showTab(tabName) {
+    ['classes', 'schedule', 'session', 'reports', 'sessionCounts', 'files'].forEach(tab => {
+        document.getElementById(tab).classList.toggle('hidden', tab !== tabName);
+        document.getElementById('tab-' + tab).classList.toggle('tab-active', tab === tabName);
+    });
+    renderAll();
+}
+
+function openAddModal() {
+    document.getElementById('addModal').classList.remove('hidden');
+    document.getElementById('addModal').classList.add('flex');
+    showForm('step1');
+}
+
+function closeAddModal() {
+    document.getElementById('addModal').classList.add('hidden');
+    document.getElementById('addModal').classList.remove('flex');
+}
+
+function showForm(type) {
+    document.getElementById('modalStep1').classList.add('hidden');
+    document.getElementById('modalStudentForm').classList.add('hidden');
+    document.getElementById('modalGroupForm').classList.add('hidden');
+
+    if (type === 'step1' || type === 'back') {
+        document.getElementById('modalStep1').classList.remove('hidden');
+    } else if (type === 'student') {
+        document.getElementById('modalStudentForm').classList.remove('hidden');
+    } else if (type === 'group') {
+        document.getElementById('modalGroupForm').classList.remove('hidden');
+    }
+}
+
+async function saveStudent() {
+    const name = document.getElementById('std_name').value.trim();
+    const grade = document.getElementById('std_grade').value.trim();
+    const day = document.getElementById('std_day').value;
+    const time = document.getElementById('std_time').value;
+    const price = document.getElementById('std_price').value;
+    const paymentMethod = document.getElementById('std_payment').value;
+
+    if (!name || !grade || !day || !time || !price) { alert('يرجى ملء جميع الحقول المطلوبة'); return; }
+
+    const success = await commit(() => {
+        DB.classes.push({ id: newId(), name, type: 'student', grade, day, time, price: Number(price), paymentMethod, studentCount: 1, students: [] });
+    });
+
+    if (success) {
+        closeAddModal();
+        ['std_name', 'std_grade', 'std_price'].forEach(id => document.getElementById(id).value = '');
+    }
+}
+
+async function saveGroup() {
+    const grade = document.getElementById('grp_grade').value.trim();
+    const count = document.getElementById('grp_count').value;
+    const day = document.getElementById('grp_day').value;
+    const time = document.getElementById('grp_time').value;
+    const price = document.getElementById('grp_price').value;
+    const paymentMethod = document.getElementById('grp_payment').value;
+
+    if (!grade || !count || !day || !time || !price) { alert('يرجى ملء جميع الحقول المطلوبة'); return; }
+
+    const success = await commit(() => {
+        DB.classes.push({ id: newId(), name: `مجموعة ${grade}`, type: 'group', grade, day, time, price: Number(price), paymentMethod, studentCount: Number(count), students: [] });
+    });
+
+    if (success) {
+        closeAddModal();
+        ['grp_grade', 'grp_count', 'grp_price'].forEach(id => document.getElementById(id).value = '');
+    }
+}
+
+async function addStudent(classId) {
+    const cls = DB.classes.find(item => item.id === classId);
+    if (!cls) return;
+    const input = prompt('الرجاء إدخال اسم الطالب الجديد لإضافته للمجموعة:');
+    const name = input?.trim();
+    if (!name) return;
+
+    if (cls.students.some(student => student.name.toLowerCase() === name.toLowerCase())) { alert('هذا الطالب موجود بالفعل'); return; }
+    await commit(() => { cls.students.push({ id: newId(), name }); });
+}
+
+async function deleteClass(classId) {
+    if (!confirm('هل أنت متأكد من حذف هذا الصف وجميع بياناته؟')) return;
+    await commit(() => {
+        DB.classes = DB.classes.filter(cls => cls.id !== classId);
+        DB.schedules = DB.schedules.filter(item => item.classId !== classId);
+        DB.reports = DB.reports.filter(item => item.classId !== classId);
+        DB.files = DB.files.filter(item => item.classId !== classId);
+    });
+}
+
+async function addSchedule(day, time) {
+    const classId = document.getElementById('schClass').value;
+    if (!classId) { alert('الرجاء اختيار الصف أولاً'); return; }
+    if (DB.schedules.some(item => item.day === day && item.time === time)) { alert('هذه الخانة مستخدمة بالفعل'); return; }
+    await commit(() => { DB.schedules.push({ id: newId(), classId, day, time }); }, renderSchedule);
+}
+
+async function deleteSchedule(scheduleId) {
+    if (!confirm('هل تريد حذف هذه الحصة من الجدول؟')) return;
+    await commit(() => { DB.schedules = DB.schedules.filter(item => item.id !== scheduleId); }, renderSchedule);
+}
+
+function loadStudentsForAttendance() {
+    const classId = document.getElementById('sessClass').value;
+    const list = document.getElementById('attendanceList');
+    const cls = DB.classes.find(item => item.id === classId);
+
+    if (!cls || (cls.type === 'student' && cls.students.length === 0)) {
+        list.innerHTML = '<p class="text-gray-500">لا يوجد طلاب مسجلين في هذا الصف للحضور.</p>';
+        return;
+    }
+
+    const students = Array.isArray(cls.students) ? cls.students : [];
+    list.innerHTML = students.map(student => {
+        const id = clean(student.id);
+        const name = clean(student.name);
+        return `
+            <div class="flex items-center justify-between p-2 border-b">
+                <span>${name}</span>
+                <div>
+                    <label class="ml-2 text-sm"> حاضر <input type="radio" name="att_${id}" value="حاضر" checked></label>
+                    <label class="text-sm"> غائب <input type="radio" name="att_${id}" value="غائب"></label>
+                    <input type="text" placeholder="التقييم" class="border rounded p-1 text-sm mr-2" data-evaluation-id="${id}">
+                </div>
+            </div>`;
+    }).join('') || '<p class="text-gray-500">لا يوجد طلاب في هذا الصف.</p>';
+}
+
+async function saveSessionReport() {
+    const classId = document.getElementById('sessClass').value;
+    const date = document.getElementById('sessDate').value;
+    const duration = Number(document.getElementById('sessDuration').value);
+    const lesson = document.getElementById('sessLesson').value.trim();
+    const cls = DB.classes.find(item => item.id === classId);
+
+    if (!cls) { alert('الرجاء اختيار الصف'); return; }
+    if (!date || !lesson || !Number.isFinite(duration) || duration <= 0) { alert('يرجى إدخال التاريخ والمدة واسم الدرس بشكل صحيح'); return; }
+
+    const attendees = [];
+    const absentees = [];
+
+    (cls.students || []).forEach(student => {
+        const selected = [...document.querySelectorAll('input[type="radio"]')]
+            .find(input => input.name.startsWith('att_') && input.closest('div')?.parentElement?.querySelector('[data-evaluation-id]')?.dataset.evaluationId === student.id);
+        const evaluation = [...document.querySelectorAll('[data-evaluation-id]')].find(input => input.dataset.evaluationId === student.id);
+
+        if (selected?.checked && selected.value === 'حاضر') {
+            attendees.push({ name: student.name, eval: evaluation?.value.trim() || 'لم يتم التقييم' });
+        } else {
+            absentees.push(student.name);
+        }
+    });
+
+    const success = await commit(() => {
+        DB.reports.push({ id: newId(), classId, className: cls.name, date, duration, lesson, attendees, absentees });
+    }, renderReports);
+
+    if (success) {
+        document.getElementById('sessLesson').value = '';
+        document.getElementById('sessDuration').value = '';
+        alert('تم حفظ التقرير بنجاح');
+    }
+}
+
+async function deleteReport(reportId) {
+    if (!confirm('هل أنت متأكد من حذف هذا التقرير؟')) return;
+    await commit(() => { DB.reports = DB.reports.filter(item => item.id !== reportId); }, renderReports);
+}
+
+async function addFile() {
+    const classId = document.getElementById('fileClass').value;
+    const type = document.getElementById('fileType').value;
+    const name = document.getElementById('fileName').value.trim();
+    const url = validHttpUrl(document.getElementById('fileUrl').value.trim());
+
+    if (!classId) { alert('الرجاء اختيار الصف'); return; }
+    if (!name || !url) { alert('يرجى إدخال اسم الملف ورابط HTTP أو HTTPS صحيح'); return; }
+
+    const success = await commit(() => { DB.files.push({ id: newId(), classId, type, name, url }); }, renderFiles);
+    if (success) {
+        document.getElementById('fileName').value = '';
+        document.getElementById('fileUrl').value = '';
+    }
+}
+
+// ================= دوال قسم عدد الحصص الجديدة =================
+async function addSessionTracker() {
+    const input = document.getElementById('sessionTrackerName');
+    const name = input.value.trim();
+    if (!name) { alert('الرجاء إدخال اسم الطالب أو المجموعة'); return; }
+
+    const success = await commit(() => {
+        DB.sessionTrackers.push({
+            id: newId(),
+            name: name,
+            sessions: []
+        });
+    }, renderSessionTrackers);
+
+    if (success) input.value = '';
+}
+
+async function deleteSessionTracker(trackerId) {
+    if (!confirm('هل تريد حذف هذا الطالب/المجموعة وكل سجل حصصه؟')) return;
+    await commit(() => {
+        DB.sessionTrackers = DB.sessionTrackers.filter(t => t.id !== trackerId);
+    }, renderSessionTrackers);
+}
+
+function openAddSessionModal(trackerId) {
+    currentTrackerId = trackerId;
+    document.getElementById('addSessionModal').classList.remove('hidden');
+    document.getElementById('addSessionModal').classList.add('flex');
+}
+
+function closeAddSessionModal() {
+    document.getElementById('addSessionModal').classList.add('hidden');
+    document.getElementById('addSessionModal').classList.remove('flex');
+    document.getElementById('newSessionNumber').value = '';
+    document.getElementById('newSessionDate').value = '';
+    document.getElementById('newSessionTime').value = '';
+}
+
+async function saveNewSession() {
+    const number = document.getElementById('newSessionNumber').value;
+    const date = document.getElementById('newSessionDate').value;
+    const time = document.getElementById('newSessionTime').value;
+
+    if (!number || !date || !time) { alert('يرجى إدخال رقم الحصة والتاريخ والوقت'); return; }
+
+    const tracker = DB.sessionTrackers.find(t => t.id === currentTrackerId);
+    if (!tracker) { alert('حدث خطأ، لم يتم العثور على السجل'); return; }
+
+    const success = await commit(() => {
+        tracker.sessions.push({
+            id: newId(),
+            number: Number(number),
+            date: date,
+            time: time
+        });
+    }, renderSessionTrackers);
+
+    if (success) {
+        closeAddSessionModal();
+    }
+}
+
+async function deleteSession(trackerId, sessionId) {
+    if (!confirm('هل تريد حذف هذه الحصة؟')) return;
+    await commit(() => {
+        const tracker = DB.sessionTrackers.find(t => t.id === trackerId);
+        if (tracker) {
+            tracker.sessions = tracker.sessions.filter(s => s.id !== sessionId);
+        }
+    }, renderSessionTrackers);
+}
+
+// ================= دوال العرض (Render) =================
+function renderAll() {
+    renderClasses();
+    renderDropdowns();
+    renderSchedule();
+    renderReports();
+    renderSessionTrackers(); // إضافة عرض متتبعات الحصص
+    renderFiles();
+    loadStudentsForAttendance();
+}
+
+function renderClasses() {
+    const list = document.getElementById('classesList');
+    list.innerHTML = DB.classes.map(cls => {
+        const students = Array.isArray(cls.students) ? cls.students : [];
+        const encodedId = encodeArgument(cls.id);
+        const typeText = cls.type === 'student' ? 'طالب فردى' : 'مجموعة';
+        const paymentText = cls.paymentMethod === 'session' ? 'بالحصة' : 'بالشهر';
+        const priceText = cls.price > 0 ? `${clean(cls.price)} (${paymentText})` : 'لم يتم التحديد';
+
+        return `
+            <div class="border p-4 rounded shadow-sm flex justify-between items-start">
+                <div class="flex-1">
+                    <div class="flex items-center">
+                        <h3 class="font-bold text-lg text-indigo-700">${clean(cls.name)}</h3>
+                        <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded mr-2">${typeText}</span>
+                    </div>
+                    <div class="text-sm text-gray-600 mt-2 space-y-1">
+                        <div><strong>الصف الدراسي:</strong> ${clean(cls.grade || 'غير محدد')}</div>
+                        <div><strong>موعد الحصة:</strong> ${clean(cls.day || 'غير محدد')} - ${clean(cls.time || 'غير محدد')}</div>
+                        <div><strong>السعر:</strong> ${priceText}</div>
+                        ${cls.type === 'group' ? `<div><strong>عدد الطلاب:</strong> ${clean(cls.studentCount || 0)}</div>` : ''}
+                        ${cls.type === 'group' && students.length > 0 ? `
+                            <div class="mt-2 pt-2 border-t">
+                                <strong>أسماء الطلاب:</strong>
+                                ${students.map(student => clean(student.name)).join('، ')}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="flex flex-col space-y-2 mr-4">
+                    ${cls.type === 'group' ? `
+                        <button onclick="addStudent(decodeArgument('${encodedId}'))" class="bg-green-500 text-white text-sm px-3 py-1 rounded hover:bg-green-600">+ طالب للمجموعة</button>
+                    ` : ''}
+                    <button onclick="deleteClass(decodeArgument('${encodedId}'))" class="bg-red-500 text-white text-sm px-3 py-1 rounded hover:bg-red-600">حذف</button>
+                </div>
+            </div>
+        `;
+    }).join('') || '<p class="text-gray-500 text-center py-4">لا توجد صفوف أو طلاب مضافين بعد</p>';
+}
+
+function renderDropdowns() {
+    ['schClass', 'sessClass', 'fileClass'].forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const previousValue = select.value;
+        select.innerHTML = '';
+        if (!DB.classes.length) { select.add(new Option('لا توجد صفوف', '')); select.disabled = true; return; }
+        select.disabled = false;
+        DB.classes.forEach(cls => { select.add(new Option(cls.name, cls.id)); });
+        if (DB.classes.some(cls => cls.id === previousValue)) select.value = previousValue;
+    });
+}
+
+function renderSchedule() {
+    const container = document.getElementById('scheduleTableContainer');
+    const days = ['الجمعة','السبت','الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+    const times = ['08:00','09:00','10:00','11:00','12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'];
+
+    let html = `
+        <table class="schedule-table text-center">
+            <tr class="bg-indigo-600 text-white">
+                <th>الوقت</th>
+                ${days.map(day => `<th>${clean(day)}</th>`).join('')}
+            </tr>
+    `;
+
+    times.forEach(time => {
+        let [hour, minute] = time.split(':').map(Number);
+        const period = hour >= 12 ? 'م' : 'ص';
+        if (hour > 12) hour -= 12;
+        html += `<tr class="bg-gray-50"><td class="font-bold text-indigo-700">${hour}:${String(minute).padStart(2, '0')} ${period}</td>`;
+        days.forEach(day => {
+            const scheduled = DB.schedules.find(item => item.day === day && item.time === time);
+            const cls = scheduled && DB.classes.find(item => item.id === scheduled.classId);
+            if (scheduled && cls) {
+                html += `
+                    <td class="schedule-cell filled" onclick="deleteSchedule(decodeArgument('${encodeArgument(scheduled.id)}'))" title="اضغط للحذف">
+                        <span class="font-bold text-indigo-800 block">${clean(cls.name)}</span>
+                        <span class="delete-schedule">×</span>
+                    </td>`;
+            } else {
+                html += `<td class="schedule-cell empty text-green-500 text-lg font-bold" onclick="addSchedule(decodeArgument('${encodeArgument(day)}'), decodeArgument('${encodeArgument(time)}'))">+</td>`;
+            }
+        });
+        html += '</tr>';
+    });
+    container.innerHTML = html + '</table>';
+}
+
+function renderReports() {
+    const list = document.getElementById('reportsList');
+    list.innerHTML = DB.reports.map(report => {
+        const cls = DB.classes.find(item => item.id === report.classId);
+        const className = cls?.name || report.className || 'صف محذوف';
+        const attendees = Array.isArray(report.attendees) ? report.attendees : [];
+        const absentees = Array.isArray(report.absentees) ? report.absentees : [];
+        const encodedReportId = encodeArgument(report.id);
+
+        return `
+            <div class="border p-4 rounded shadow-sm bg-gray-50">
+                <div class="flex justify-between items-center mb-2 pb-2 border-b">
+                    <h3 class="font-bold text-lg text-indigo-700">تقرير: ${clean(className)}</h3>
+                    <button onclick="deleteReport(decodeArgument('${encodedReportId}'))" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded shadow-sm">🗑 حذف التقرير</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-sm mt-2 mb-2">
+                    <span><strong>التاريخ:</strong> ${clean(report.date)}</span>
+                    <span><strong>المدة:</strong> ${clean(report.duration)} دقيقة</span>
+                    <span class="col-span-2"><strong>الدرس:</strong> ${clean(report.lesson)}</span>
+                </div>
+                <div class="mt-2">
+                    <strong>الحضور:</strong>
+                    <ul class="list-disc pr-5 text-sm mt-1">
+                        ${attendees.map(item => `<li>${clean(item.name)} - ${clean(item.eval)}</li>`).join('') || '<li>لا يوجد</li>'}
+                    </ul>
+                </div>
+                <div class="mt-2 text-sm text-red-500">
+                    <strong>الغائبون:</strong> ${absentees.map(name => clean(name)).join('، ') || 'لا يوجد'}
+                </div>
+            </div>
+        `;
+    }).join('') || '<p>لا توجد تقارير بعد</p>';
+}
+
+// دالة عرض قسم عدد الحصص
+function renderSessionTrackers() {
+    const list = document.getElementById('sessionTrackersList');
+    
+    list.innerHTML = DB.sessionTrackers.map(tracker => {
+        const sessions = Array.isArray(tracker.sessions) ? tracker.sessions : [];
+        const encodedTrackerId = encodeArgument(tracker.id);
+        
+        let sessionsHtml = sessions.map(s => `
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded text-sm mb-2">
+                <div>
+                    <span class="font-bold text-indigo-600">رقم الحصة: ${clean(s.number)}</span> | 
+                    <span>التاريخ: ${clean(s.date)}</span> | 
+                    <span>الوقت: ${clean(s.time)}</span>
+                </div>
+                <button onclick="deleteSession(decodeArgument('${encodedTrackerId}'), decodeArgument('${encodeArgument(s.id)}'))" 
+                        class="text-red-500 hover:text-red-700 text-xs font-bold">حذف الحصة</button>
+            </div>
+        `).join('') || '<p class="text-xs text-gray-400 mb-2">لا توجد حصص مسجلة بعد</p>';
+
+        return `
+            <div class="border p-4 rounded shadow-sm">
+                <div class="flex justify-between items-center mb-3 pb-2 border-b">
+                    <h3 class="font-bold text-lg text-indigo-700">
+                        ${clean(tracker.name)} 
+                        <span class="text-sm text-gray-500 font-normal">(إجمالي الحصص: ${sessions.length})</span>
+                    </h3>
+                    <div class="space-x-2 space-x-reverse">
+                        <button onclick="openAddSessionModal(decodeArgument('${encodedTrackerId}'))" class="bg-green-500 text-white text-sm px-3 py-1 rounded hover:bg-green-600">+ إضافة حصة</button>
+                        <button onclick="deleteSessionTracker(decodeArgument('${encodedTrackerId}'))" class="bg-red-500 text-white text-sm px-3 py-1 rounded hover:bg-red-600">حذف</button>
+                    </div>
+                </div>
+                <div>
+                    ${sessionsHtml}
+                </div>
+            </div>
+        `;
+    }).join('') || '<p class="text-gray-500 text-center py-4">لا يوجد طلاب أو مجموعات مضافة</p>';
+}
+
+function renderFiles() {
+    const list = document.getElementById('filesList');
+    const colors = {
+        'كتاب': 'bg-blue-100 text-blue-800',
+        'عرض تقديمي': 'bg-purple-100 text-purple-800',
+        'ورقة عمل': 'bg-yellow-100 text-yellow-800',
+        'واجب': 'bg-red-100 text-red-800'
+    };
+
+    list.innerHTML = DB.files.map(file => {
+        const cls = DB.classes.find(item => item.id === file.classId);
+        const safeUrl = validHttpUrl(file.url);
+        const color = colors[file.type] || 'bg-gray-100 text-gray-800';
+        const link = safeUrl ? `<a href="${clean(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 text-sm hover:underline">فتح الملف</a>` : '<span class="text-red-600 text-sm">رابط غير صالح</span>';
+
+        return `
+            <div class="border p-4 rounded shadow-sm">
+                <span class="text-xs font-bold px-2 py-1 rounded ${color}">${clean(file.type)}</span>
+                <h4 class="font-bold mt-2">${clean(file.name)}</h4>
+                <p class="text-xs text-gray-500 mb-2">${clean(cls?.name || 'صف محذوف')}</p>
+                ${link}
+            </div>
+        `;
+    }).join('') || '<p>لا توجد ملفات مضافة</p>';
+}
+</script>
+</body>
+</html>
