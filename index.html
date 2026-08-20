@@ -664,12 +664,12 @@ async function saveNewSession() {
     const time = document.getElementById('newSessionTime').value;
 
     if (!number || !date || !time) { alert('يرجى إدخال رقم الحصة والتاريخ والوقت'); return; }
+    
+    const tracker = DB.sessionTrackers.find(t => t.id === currentTrackerId);
+    if (!tracker) { alert('حدث خطأ، لم يتم العثور على السجل'); return; }
     if (tracker.sessions.some(session => session.number === Number(number))) {
     alert('رقم الحصة موجود بالفعل');
     return;}
-    const tracker = DB.sessionTrackers.find(t => t.id === currentTrackerId);
-    if (!tracker) { alert('حدث خطأ، لم يتم العثور على السجل'); return; }
-
     const success = await commit(() => {
         tracker.sessions.push({
             id: newId(),
