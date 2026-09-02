@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+
+    <title>منصة مُعلم برو السحابية</title>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* تنسيقات خاصة بلوحة التحكم */
+        .stat-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .day-checkbox:checked + label {
+            background-color: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
+    </style>
+</head>
+
+<body class="text-gray-800">
+
+<div id="auth-screen" class="flex items-center justify-center min-h-screen bg-indigo-100">
+    <div class="bg-white p-8 rounded shadow-md w-full max-w-md text-center">
+        <h1 class="text-2xl font-bold mb-6 text-indigo-700">منصة مُعلم برو</h1>
+        <p class="text-gray-500 mb-4">سجل الدخول للوصول إلى صفوفك وبياناتك</p>
+
+        <input type="email" id="email" placeholder="البريد الإلكتروني" class="border p-2 rounded w-full mb-3 text-right">
+        <input type="password" id="password" placeholder="كلمة المرور" class="border p-2 rounded w-full mb-4 text-right">
+
+        <button onclick="login()" class="bg-indigo-600 text-white w-full py-2 rounded hover:bg-indigo-700 mb-2">تسجيل الدخول</button>
+        <button onclick="signup()" class="bg-green-600 text-white w-full py-2 rounded hover:bg-green-700 mb-4">إنشاء حساب جديد</button>
+
+        <hr class="my-4">
+
+        <button onclick="loginWithGoogle()" class="bg-white border border-gray-300 text-gray-700 w-full py-2 rounded hover:bg-gray-50 flex items-center justify-center">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5 ml-2" alt="Google">
+            الدخول بحساب جوجل
+        </button>
+    </div>
+</div>
+
+<header id="app-header" class="bg-indigo-700 text-white p-4 shadow-md hidden">
+    <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-2xl font-bold">منصة مُعلم برو</h1>
+        <div class="flex items-center space-x-3 space-x-reverse">
+            <span id="user-info" class="text-sm"></span>
+            <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded">تسجيل الخروج</button>
+        </div>
+    </div>
+</header>
+
+<nav id="app-nav" class="bg-white shadow-sm mb-6 hidden">
+    <div class="container mx-auto flex flex-wrap p-2 space-x-2 space-x-reverse">
+        <button onclick="showTab('dashboard')" id="tab-dashboard" class="px-4 py-2 rounded hover:bg-indigo-100 tab-active">الرئيسية</button>
+        <button onclick="showTab('classes')" id="tab-classes" class="px-4 py-2 rounded hover:bg-indigo-100">الصفوف والطلاب</button>
+        <button onclick="showTab('schedule')" id="tab-schedule" class="px-4 py-2 rounded hover:bg-indigo-100">الجدول الأسبوعي</button>
+        <button onclick="showTab('session')" id="tab-session" class="px-4 py-2 rounded hover:bg-indigo-100">تسجيل الحصة والحضور</button>
+        <button onclick="showTab('reports')" id="tab-reports" class="px-4 py-2 rounded hover:bg-indigo-100">تقارير الحصص</button>
+        <button onclick="showTab('files')" id="tab-files" class="px-4 py-2 rounded hover:bg-indigo-100">مركز الملفات</button>
+    </div>
+</nav>
+
+<main id="app-main" class="container mx-auto px-4 pb-10 hidden">
+    
+    <!-- ================= لوحة التحكم الرئيسية ================= -->
+    <section id="dashboard" class="bg-white p-6 rounded shadow">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">لوحة المعلومات والإحصائيات</h2>
+        <div id="dashboardContent" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <p class="text-gray-500 col-span-full text-center py-10">جاري تحميل البيانات...</p>
+        </div>
+    </section>
+
+    <!-- ================= الصفوف والطلاب ================= -->
+    <section id="classes" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">إدارة المجموعات والطلاب</h2>
+
+        <div class="mb-6 p-4 border rounded bg-gray-50">
+            <h3 class="font-bold mb-2 text-indigo-700">إضافة مجموعة جديدة</h3>
+            <input type="text" id="className" placeholder="اسم المجموعة (مثال: صف ثالث ثانوي)" class="border p-2 rounded w-full mb-3">
+            
+            <label class="block mb-1 text-sm font-bold">اختر أيام الحصة (يمكن اختيار أكثر من يوم):</label>
+            <div class="flex flex-wrap gap-2 mb-4">
+                <div class="flex items-center">
+                    <input type="checkbox" id="day_sun" value="الأحد" class="day-checkbox hidden">
+                    <label for="day_sun" class="border p-2 rounded cursor-pointer hover:bg-indigo-50 text-sm">الأحد</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="day_mon" value="الإثنين" class="day-checkbox hidden">
+                    <label for="day_mon" class="border p-2 rounded cursor-pointer hover:bg-indigo-50 text-sm">الإثنين</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="day_tue" value="الثلاثاء" class="day-checkbox hidden">
+                    <label for="day_tue" class="border p-2 rounded cursor-pointer hover:bg-indigo-50 text-sm">الثلاثاء</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="day_wed" value="الأربعاء" class="day-checkbox hidden">
+                    <label for="day_wed" class="border p-2 rounded cursor-pointer hover:bg-indigo-50 text-sm">الأربعاء</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="day_thu" value="الخميس" class="day-checkbox hidden">
+                    <label for="day_thu" class="border p-2 rounded cursor-pointer hover:bg-indigo-50 text-sm">الخميس</label>
+                </div>
+            </div>
+
+            <button onclick="addClass()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full">إضافة المجموعة</button>
+        </div>
+
+        <div class="mb-4 p-4 border rounded bg-indigo-50">
+            <h3 class="font-bold mb-2 text-green-700">إضافة طالب سريع</h3>
+            <div class="flex space-x-2 space-x-reverse">
+                <input type="text" id="studentName" placeholder="اسم الطالب" class="border p-2 rounded flex-1">
+                <button onclick="quickAddStudent()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">إضافة لأول مجموعة</button>
+            </div>
+        </div>
+
+        <div id="classesList" class="space-y-4"></div>
+    </section>
+
+    <!-- ================= الجدول الأسبوعي ================= -->
+    <section id="schedule" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">الجدول الأسبوعي</h2>
+
+        <div class="mb-4 p-3 bg-indigo-50 rounded flex items-center space-x-2 space-x-reverse">
+            <label class="font-bold text-sm whitespace-nowrap">اختر الصف لإضافته:</label>
+            <select id="schClass" class="border p-2 rounded flex-1"></select>
+        </div>
+
+        <p class="text-sm text-gray-500 mb-4">اضغط على (+) لإضافة الحصة، واضغط على الحصة المضافة لحذفها.</p>
+
+        <div class="overflow-x-auto">
+            <div id="scheduleTableContainer"></div>
+        </div>
+    </section>
+
+    <!-- ================= تسجيل الحصة ================= -->
+    <section id="session" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">تسجيل الحصة الحالية</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block mb-1">اختر الصف</label>
+                <select id="sessClass" onchange="loadStudentsForAttendance()" class="border p-2 rounded w-full"></select>
+            </div>
+            <div>
+                <label class="block mb-1">تاريخ الحصة</label>
+                <input type="date" id="sessDate" class="border p-2 rounded w-full">
+            </div>
+            <div>
+                <label class="block mb-1">مدة الحصة بالدقائق</label>
+                <input type="number" id="sessDuration" min="1" placeholder="مثال: 60" class="border p-2 rounded w-full">
+            </div>
+            <div>
+                <label class="block mb-1">اسم الدرس المشروح</label>
+                <input type="text" id="sessLesson" placeholder="مثال: الفصل الأول" class="border p-2 rounded w-full">
+            </div>
+        </div>
+
+        <h3 class="font-bold mb-2">تسجيل الحضور:</h3>
+        <div id="attendanceList" class="space-y-2 mb-4 max-h-60 overflow-y-auto border p-2 rounded"></div>
+
+        <button onclick="saveSessionReport()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">حفظ تقرير ما بعد الحصة</button>
+    </section>
+
+    <!-- ================= تقارير الحصص ================= -->
+    <section id="reports" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">تقارير ما بعد الحصة</h2>
+        <div id="reportsList" class="space-y-4"></div>
+    </section>
+
+    <!-- ================= مركز الملفات ================= -->
+    <section id="files" class="bg-white p-6 rounded shadow hidden">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">مركز الملفات والواجبات</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <select id="fileClass" class="border p-2 rounded"></select>
+            <select id="fileType" class="border p-2 rounded">
+                <option value="كتاب">كتاب</option>
+                <option value="عرض تقديمي">عرض تقديمي</option>
+                <option value="ورقة عمل">ورقة عمل</option>
+                <option value="واجب">واجب</option>
+            </select>
+            <input type="text" id="fileName" placeholder="اسم الملف" class="border p-2 rounded">
+            <input type="url" id="fileUrl" placeholder="رابط الملف" class="border p-2 rounded">
+        </div>
+
+        <button onclick="addFile()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mb-4">رفع/إضافة</button>
+
+        <div id="filesList" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+    </section>
+</main>
+
+<script>
+const firebaseConfig = {
+    apiKey: "AIzaSyAYpVq54c9bgyhn5yLXtLo89Gblw-2IqYU",
+    authDomain: "teacher-bro.firebaseapp.com",
+    projectId: "teacher-bro",
+    storageBucket: "teacher-bro.firebasestorage.app",
+    messagingSenderId: "631056398143",
+    appId: "1:631056398143:web:a7299c8ea3a20ea7aa058a"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const emptyDB = () => ({
+    classes: [],
+    schedules: [],
+    reports: [],
+    files: [],
+    payments: [] // تم إضافة المدفوعات للوحة التحكم
+});
+
+let DB = emptyDB();
+let currentUser = null;
+let saveQueue = Promise.resolve();
+
+function newId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+function clean(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[char]));
+}
+
+function encodeArgument(value) { return encodeURIComponent(String(value ?? '')); }
+function decodeArgument(value) { return decodeURIComponent(value); }
+
+function validHttpUrl(value) {
+    try {
+        const url = new URL(String(value));
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+    } catch { return null; }
+}
+
+function normalizeClass(item) {
+    const students = Array.isArray(item?.students) ? item.students : [];
+    const days = Array.isArray(item?.days) ? item.days : [];
+    return {
+        id: String(item?.id || newId()),
+        name: String(item?.name || '').trim(),
+        days: days.map(d => String(d).trim()).filter(Boolean),
+        students: students.map(student => ({
+            id: String(student?.id || newId()),
+            name: String(student?.name || '').trim()
+        })).filter(student => student.name)
+    };
+}
+
+function normalizeSchedule(item) {
+    return {
+        id: String(item?.id || newId()),
+        classId: String(item?.classId || ''),
+        day: String(item?.day || ''),
+        time: String(item?.time || '')
+    };
+}
+
+function normalizeReport(item) {
+    return {
+        id: String(item?.id || newId()),
+        classId: String(item?.classId || ''),
+        className: String(item?.className || '').trim(),
+        date: String(item?.date || ''),
+        duration: Number(item?.duration) || 0,
+        lesson: String(item?.lesson || '').trim(),
+        attendees: Array.isArray(item?.attendees) ? item.attendees.map(person => ({
+            name: String(person?.name || ''),
+            eval: String(person?.eval || 'لم يتم التقييم')
+        })).filter(person => person.name) : [],
+        absentees: Array.isArray(item?.absentees) ? item.absentees.map(name => String(name || '')).filter(Boolean) : []
+    };
+}
+
+function normalizeFile(item) {
+    return {
+        id: String(item?.id || newId()),
+        classId: String(item?.classId || ''),
+        type: String(item?.type || 'ملف'),
+        name: String(item?.name || '').trim(),
+        url: validHttpUrl(item?.url) || ''
+    };
+}
+
+function normalizePayment(item) {
+    return {
+        id: String(item?.id || newId()),
+        classId: String(item?.classId || ''),
+        studentName: String(item?.studentName || '').trim(),
+        amountDue: Number(item?.amountDue) || 0,
+        amountPaid: Number(item?.amountPaid) || 0,
+        dueDate: String(item?.dueDate || '')
+    };
+}
+
+function normalizeDB(data) {
+    const source = data || {};
+    const classes = Array.isArray(source.classes) ? source.classes.map(normalizeClass).filter(cls => cls.name) : [];
+    const classIds = new Set(classes.map(cls => cls.id));
+
+    return {
+        classes,
+        schedules: Array.isArray(source.schedules) ? source.schedules.map(normalizeSchedule).filter(item => classIds.has(item.classId) && item.day && item.time) : [],
+        reports: Array.isArray(source.reports) ? source.reports.map(normalizeReport).filter(item => classIds.has(item.classId) && item.date) : [],
+        files: Array.isArray(source.files) ? source.files.map(normalizeFile).filter(item => classIds.has(item.classId) && item.name && item.url) : [],
+        payments: Array.isArray(source.payments) ? source.payments.map(normalizePayment).filter(item => classIds.has(item.classId) && item.studentName) : []
+    };
+}
+
+// ================= Firebase Auth =================
+function login() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || !password) return alert('يرجى إدخال البريد الإلكتروني وكلمة المرور');
+    auth.signInWithEmailAndPassword(email, password).catch(error => alert('خطأ: ' + error.message));
+}
+
+function signup() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || password.length < 6) return alert('أدخل بريداً صحيحاً وكلمة مرور من 6 أحرف على الأقل');
+    auth.createUserWithEmailAndPassword(email, password).catch(error => alert('خطأ: ' + error.message));
+}
+
+function loginWithGoogle() {
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(error => alert('خطأ: ' + error.message));
+}
+
+function logout() {
+    auth.signOut().catch(error => alert('تعذر تسجيل الخروج: ' + error.message));
+}
+
+auth.onAuthStateChanged(async user => {
+    currentUser = user;
+    document.getElementById('auth-screen').classList.toggle('hidden', !!user);
+    document.getElementById('app-header').classList.toggle('hidden', !user);
+    document.getElementById('app-nav').classList.toggle('hidden', !user);
+    document.getElementById('app-main').classList.toggle('hidden', !user);
+
+    if (!user) {
+        DB = emptyDB();
+        saveQueue = Promise.resolve();
+        return;
+    }
+
+    document.getElementById('user-info').textContent = `مرحباً، ${user.displayName || user.email}`;
+
+    try {
+        await loadData(user.uid);
+    } catch (error) {
+        console.error(error);
+        alert('تعذر تحميل البيانات');
+    }
+});
+
+async function loadData(uid = currentUser?.uid) {
+    if (!uid) return;
+    const reference = db.collection('users').doc(uid);
+    const snapshot = await reference.get();
+
+    if (currentUser?.uid !== uid) return;
+
+    if (snapshot.exists && snapshot.data()?.db) {
+        DB = normalizeDB(snapshot.data().db);
+    } else {
+        DB = emptyDB();
+        await reference.set({ db: DB });
+    }
+    renderAll();
+}
+
+function saveData() {
+    if (!currentUser) return Promise.reject(new Error('لا يوجد مستخدم مسجل الدخول'));
+    const uid = currentUser.uid;
+    const dataToSave = clone(DB);
+
+    saveQueue = saveQueue.catch(() => {}).then(() => {
+        if (!currentUser || currentUser.uid !== uid) throw new Error('تغير المستخدم أثناء الحفظ');
+        return db.collection('users').doc(uid).set({ db: dataToSave });
+    });
+    return saveQueue;
+}
+
+async function commit(change, renderer = renderAll) {
+    const previousDB = clone(DB);
+    try {
+        change();
+        await saveData();
+        renderer();
+        return true;
+    } catch (error) {
+        console.error(error);
+        DB = previousDB;
+        renderer();
+        alert('تعذر حفظ البيانات. تم إلغاء التغيير.');
+        return false;
+    }
+}
+
+function showTab(tabName) {
+    ['dashboard', 'classes', 'schedule', 'session', 'reports', 'files'].forEach(tab => {
+        document.getElementById(tab).classList.toggle('hidden', tab !== tabName);
+        document.getElementById('tab-' + tab).classList.toggle('tab-active', tab === tabName);
+    });
+    renderAll();
+}
+
+// ================= Classes & Students Logic =================
+async function addClass() {
+    const input = document.getElementById('className');
+    const name = input.value.trim();
+    if (!name) return alert('الرجاء إدخال اسم الصف');
+
+    const selectedDays = Array.from(document.querySelectorAll('.day-checkbox:checked')).map(cb => cb.value);
+
+    const success = await commit(() => {
+        DB.classes.push({
+            id: newId(),
+            name,
+            days: selectedDays,
+            students: []
+        });
+    });
+
+    if (success) {
+        input.value = '';
+        document.querySelectorAll('.day-checkbox').forEach(cb => cb.checked = false);
+    }
+}
+
+async function quickAddStudent() {
+    const input = document.getElementById('studentName');
+    const name = input.value.trim();
+    if (!name) return alert('الرجاء إدخال اسم الطالب');
+    
+    if (DB.classes.length === 0) return alert('الرجاء إنشاء مجموعة أولاً');
+    const cls = DB.classes[0]; // إضافة سريع لأول مجموعة
+
+    if (cls.students.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+        return alert('هذا الطالب موجود بالفعل');
+    }
+
+    const success = await commit(() => {
+        cls.students.push({ id: newId(), name });
+    });
+    if (success) input.value = '';
+}
+
+async function addStudent(classId) {
+    const cls = DB.classes.find(item => item.id === classId);
+    if (!cls) return;
+
+    const input = prompt('الرجاء إدخال اسم الطالب الجديد:');
+    const name = input?.trim();
+    if (!name) return;
+
+    if (cls.students.some(student => student.name.toLowerCase() === name.toLowerCase())) {
+        return alert('هذا الطالب موجود بالفعل');
+    }
+
+    await commit(() => {
+        cls.students.push({ id: newId(), name });
+    });
+}
+
+async function deleteClass(classId) {
+    if (!confirm('هل أنت متأكد من حذف الصف وجميع بياناته؟')) return;
+    await commit(() => {
+        DB.classes = DB.classes.filter(cls => cls.id !== classId);
+        DB.schedules = DB.schedules.filter(item => item.classId !== classId);
+        DB.reports = DB.reports.filter(item => item.classId !== classId);
+        DB.files = DB.files.filter(item => item.classId !== classId);
+        DB.payments = DB.payments.filter(item => item.classId !== classId);
+    });
+}
+
+// ================= Schedule Logic =================
+async function addSchedule(day, time) {
+    const classId = document.getElementById('schClass').value;
+    if (!classId) return alert('الرجاء اختيار الصف أولاً');
+    if (DB.schedules.some(item => item.day === day && item.time === time)) return alert('هذه الخانة مستخدمة بالفعل');
+
+    await commit(() => {
+        DB.schedules.push({ id: newId(), classId, day, time });
+    }, renderSchedule);
+}
+
+async function deleteSchedule(scheduleId) {
+    if (!confirm('هل تريد حذف هذه الحصة من الجدول؟')) return;
+    await commit(() => {
+        DB.schedules = DB.schedules.filter(item => item.id !== scheduleId);
+    }, renderSchedule);
+}
+
+// ================= Session & Attendance Logic =================
+function loadStudentsForAttendance() {
+    const classId = document.getElementById('sessClass').value;
+    const list = document.getElementById('attendanceList');
+    const cls = DB.classes.find(item => item.id === classId);
+
+    if (!cls) {
+        list.innerHTML = '<p class="text-gray-500">لا يوجد صف أو طلاب.</p>';
+        return;
+    }
+
+    const students = Array.isArray(cls.students) ? cls.students : [];
+    list.innerHTML = students.map(student => {
+        const id = clean(student.id);
+        const name = clean(student.name);
+        return `
+            <div class="flex items-center justify-between p-2 border-b">
+                <span>${name}</span>
+                <div>
+                    <label class="ml-2 text-sm">حاضر <input type="radio" name="att_${id}" value="حاضر" checked></label>
+                    <label class="text-sm">غائب <input type="radio" name="att_${id}" value="غائب"></label>
+                    <input type="text" placeholder="التقييم" class="border rounded p-1 text-sm mr-2" data-evaluation-id="${id}">
+                </div>
+            </div>
+        `;
+    }).join('') || '<p class="text-gray-500">لا يوجد طلاب في هذا الصف.</p>';
+}
+
+async function saveSessionReport() {
+    const classId = document.getElementById('sessClass').value;
+    const date = document.getElementById('sessDate').value;
+    const duration = Number(document.getElementById('sessDuration').value);
+    const lesson = document.getElementById('sessLesson').value.trim();
+    const cls = DB.classes.find(item => item.id === classId);
+
+    if (!cls) return alert('الرجاء اختيار الصف');
+    if (!date || !lesson || !Number.isFinite(duration) || duration <= 0) return alert('يرجى إدخال التاريخ والمدة واسم الدرس بشكل صحيح');
+
+    const attendees = [];
+    const absentees = [];
+
+    (cls.students || []).forEach(student => {
+        const selected = [...document.querySelectorAll('input[type="radio"]')].find(input =>
+            input.name.startsWith('att_') && input.closest('div')?.parentElement?.querySelector('[data-evaluation-id]')?.dataset.evaluationId === student.id
+        );
+        const evaluation = [...document.querySelectorAll('[data-evaluation-id]')].find(input => input.dataset.evaluationId === student.id);
+
+        if (selected?.checked && selected.value === 'حاضر') {
+            attendees.push({ name: student.name, eval: evaluation?.value.trim() || 'لم يتم التقييم' });
+        } else {
+            absentees.push(student.name);
+        }
+    });
+
+    const success = await commit(() => {
+        DB.reports.push({
+            id: newId(), classId, className: cls.name, date, duration, lesson, attendees, absentees
+        });
+    }, renderReports);
+
+    if (success) {
+        document.getElementById('sessLesson').value = '';
+        document.getElementById('sessDuration').value = '';
+        alert('تم حفظ التقرير بنجاح');
+    }
+}
+
+// ================= Files Logic =================
+async function addFile() {
+    const classId = document.getElementById('fileClass').value;
+    const type = document.getElementById('fileType').value;
+    const name = document.getElementById('fileName').value.trim();
+    const url = validHttpUrl(document.getElementById('fileUrl').value.trim());
+
+    if (!classId) return alert('الرجاء اختيار الصف');
+    if (!name || !url) return alert('يرجى إدخال اسم الملف ورابط HTTP أو HTTPS صحيح');
+
+    const success = await commit(() => {
+        DB.files.push({ id: newId(), classId, type, name, url });
+    }, renderFiles);
+
+    if (success) {
+        document.getElementById('fileName').value = '';
+        document.getElementById('fileUrl').value = '';
+    }
+}
+
+// ================= Rendering Functions =================
+function renderAll() {
+    renderDashboard();
+    renderClasses();
+    renderDropdowns();
+    renderSchedule();
+    renderReports();
+    renderFiles();
+    loadStudentsForAttendance();
+}
+
+function renderDashboard() {
+    const container = document.getElementById('dashboardContent');
+    if (!container) return;
+
+    const totalStudents = DB.classes.reduce((sum, cls) => sum + cls.students.length, 0);
+    const totalReports = DB.reports.length;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const monthLessons = DB.reports.filter(r => r.date.startsWith(currentMonth)).length;
+    const absentees = DB.reports.reduce((sum, r) => sum + r.absentees.length, 0);
+    const incompleteHomework = DB.files.filter(f => f.type === 'واجب').length; // تقديري بناءً على ملفات الواجبات
+    const evaluations = DB.reports.reduce((sum, r) => sum + r.attendees.filter(a => a.eval && a.eval !== 'لم يتم التقييم').length, 0);
+    
+    let totalDue = 0, totalPaid = 0, totalRemaining = 0;
+    let latePayments = [];
+    let academicFollowUp = [];
+    const today = new Date();
+
+    DB.payments.forEach(p => {
+        const remaining = p.amountDue - p.amountPaid;
+        totalDue += p.amountDue;
+        totalPaid += p.amountPaid;
+        totalRemaining += remaining;
+        if (remaining > 0 && new Date(p.dueDate) < today) {
+            latePayments.push(p);
+        }
+    });
+
+    DB.reports.forEach(rep => {
+        rep.attendees.forEach(att => {
+            if (att.eval.includes("ضعيف") || att.eval.includes("ممتاز")) { // تعديل حسب نص التقييم
+                academicFollowUp.push({ name: att.name, reason: att.eval });
+            }
+        });
+    });
+
+    const upcomingLessons = DB.schedules.length; // تقديري
+
+    let alerts = [];
+    if (latePayments.length > 0) alerts.push(`يوجد ${latePayments.length} طالب لديهم مدفوعات متأخرة.`);
+    if (absentees > 0) alerts.push(`سجل ${absentees} غياب في الحصص السابقة.`);
+    if (incompleteHomework > 0) alerts.push(`يوجد ${incompleteHomework} واجب مرفوع لم يتم حله بعد.`);
+
+    container.innerHTML = `
+        <div class="stat-card bg-blue-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">عدد الطلاب الحاليين</h3>
+            <p class="text-3xl font-bold text-blue-600 mt-2">${totalStudents}</p>
+        </div>
+        <div class="stat-card bg-indigo-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">إجمالي الحصص المسجلة</h3>
+            <p class="text-3xl font-bold text-indigo-600 mt-2">${totalReports}</p>
+        </div>
+        <div class="stat-card bg-green-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">حصص الشهر الحالي</h3>
+            <p class="text-3xl font-bold text-green-600 mt-2">${monthLessons}</p>
+        </div>
+        <div class="stat-card bg-red-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">عدد الطلاب الغائبين</h3>
+            <p class="text-3xl font-bold text-red-600 mt-2">${absentees}</p>
+        </div>
+        <div class="stat-card bg-yellow-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">الواجبات (المرفوعة)</h3>
+            <p class="text-3xl font-bold text-yellow-600 mt-2">${incompleteHomework}</p>
+        </div>
+        <div class="stat-card bg-purple-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">التقييمات المسجلة</h3>
+            <p class="text-3xl font-bold text-purple-600 mt-2">${evaluations}</p>
+        </div>
+        <div class="stat-card bg-blue-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">إجمالي المبالغ المطلوبة</h3>
+            <p class="text-3xl font-bold text-blue-600 mt-2">${totalDue} ر.س</p>
+        </div>
+        <div class="stat-card bg-green-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">إجمالي المبالغ المدفوعة</h3>
+            <p class="text-3xl font-bold text-green-600 mt-2">${totalPaid} ر.س</p>
+        </div>
+        <div class="stat-card bg-red-50 p-4 rounded shadow text-center">
+            <h3 class="text-gray-600 text-sm">إجمالي المبالغ المتبقية</h3>
+            <p class="text-3xl font-bold text-red-600 mt-2">${totalRemaining} ر.س</p>
+        </div>
+        <div class="stat-card col-span-1 md:col-span-2 lg:col-span-2 bg-white p-4 rounded shadow">
+            <h3 class="font-bold text-red-600 border-b pb-2 mb-2">طلاب لديهم مدفوعات متأخرة</h3>
+            <div class="max-h-32 overflow-y-auto text-sm">
+                ${latePayments.length > 0 ? latePayments.map(p => `<div class="flex justify-between py-1"><span>${clean(p.studentName)}</span><span class="text-red-500">${p.amountDue - p.amountPaid} ر.س</span></div>`).join('') : '<p class="text-gray-400">لا يوجد</p>'}
+            </div>
+        </div>
+        <div class="stat-card col-span-1 md:col-span-2 lg:col-span-2 bg-white p-4 rounded shadow">
+            <h3 class="font-bold text-yellow-600 border-b pb-2 mb-2">طلاب يحتاجون متابعة أكاديمية</h3>
+            <div class="max-h-32 overflow-y-auto text-sm">
+                ${academicFollowUp.length > 0 ? academicFollowUp.map(s => `<div class="flex justify-between py-1"><span>${clean(s.name)}</span><span class="text-yellow-600">${clean(s.reason)}</span></div>`).join('') : '<p class="text-gray-400">لا يوجد</p>'}
+            </div>
+        </div>
+        <div class="stat-card col-span-1 md:col-span-2 lg:col-span-2 bg-white p-4 rounded shadow">
+            <h3 class="font-bold text-indigo-600 border-b pb-2 mb-2">الحصص القادمة (المجدولة)</h3>
+            <div class="max-h-32 overflow-y-auto text-sm">
+                ${upcomingLessons > 0 ? DB.schedules.slice(0, 5).map(s => { const cls = DB.classes.find(c => c.id === s.classId); return `<div class="py-1"><span class="font-bold">${clean(cls?.name || '')}</span> - ${clean(s.day)} ${clean(s.time)}</div>` }).join('') : '<p class="text-gray-400">لا يوجد حصص مجدولة في النظام</p>'}
+            </div>
+        </div>
+        <div class="stat-card col-span-1 md:col-span-2 lg:col-span-2 bg-white p-4 rounded shadow border-t-4 border-red-500">
+            <h3 class="font-bold text-gray-800 border-b pb-2 mb-2">تنبيهات سريعة</h3>
+            <div class="text-sm space-y-1">
+                ${alerts.length > 0 ? alerts.map(a => `<div class="flex items-center text-red-500"><span class="w-2 h-2 bg-red-500 rounded-full ml-2"></span> ${a}</div>`).join('') : '<p class="text-green-500 flex items-center"><span class="w-2 h-2 bg-green-500 rounded-full ml-2"></span> كل شيء يسير على ما يرام</p>'}
+            </div>
+        </div>
+    `;
+}
+
+function renderClasses() {
+    const list = document.getElementById('classesList');
+    list.innerHTML = DB.classes.map(cls => {
+        const students = Array.isArray(cls.students) ? cls.students : [];
+        const days = Array.isArray(cls.days) ? cls.days : [];
+        const encodedId = encodeArgument(cls.id);
+
+        return `
+            <div class="border p-4 rounded shadow-sm flex justify-between items-center">
+                <div>
+                    <h3 class="font-bold text-lg text-indigo-700">${clean(cls.name)}</h3>
+                    <div class="text-xs text-gray-500 mt-1">
+                        <strong>أيام الحصة:</strong> ${days.join('، ') || 'لم يحدد'}
+                    </div>
+                    <div class="text-sm text-gray-600 mt-2">
+                        <strong>الطلاب:</strong> ${students.map(student => clean(student.name)).join('، ') || 'لا يوجد'}
+                    </div>
+                </div>
+                <div class="flex flex-col space-y-2">
+                    <button onclick="addStudent(decodeArgument('${encodedId}'))" class="bg-green-500 text-white text-sm px-2 py-1 rounded hover:bg-green-600">+ طالب</button>
+                    <button onclick="deleteClass(decodeArgument('${encodedId}'))" class="bg-red-500 text-white text-sm px-2 py-1 rounded hover:bg-red-600">حذف الصف</button>
+                </div>
+            </div>
+        `;
+    }).join('') || '<p class="text-gray-500 text-center py-4">لا توجد صفوف مضافة بعد</p>';
+}
+
+function renderDropdowns() {
+    ['schClass', 'sessClass', 'fileClass'].forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const previousValue = select.value;
+        select.innerHTML = '';
+        if (!DB.classes.length) {
+            select.add(new Option('لا توجد صفوف', ''));
+            select.disabled = true;
+            return;
+        }
+        select.disabled = false;
+        DB.classes.forEach(cls => select.add(new Option(cls.name, cls.id)));
+        if (DB.classes.some(cls => cls.id === previousValue)) select.value = previousValue;
+    });
+}
+
+function renderSchedule() {
+    const container = document.getElementById('scheduleTableContainer');
+    const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+    const times = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'];
+
+    let html = `
+        <table class="schedule-table text-center w-full">
+            <tr class="bg-indigo-600 text-white">
+                <th class="p-2">الوقت</th>
+                ${days.map(day => `<th class="p-2">${clean(day)}</th>`).join('')}
+            </tr>
+    `;
+
+    times.forEach(time => {
+        let [hour, minute] = time.split(':').map(Number);
+        const period = hour >= 12 ? 'م' : 'ص';
+        if (hour > 12) hour -= 12;
+
+        html += `<tr class="bg-gray-50 border-b"><td class="font-bold text-indigo-700 p-2">${hour}:${String(minute).padStart(2, '0')} ${period}</td>`;
+
+        days.forEach(day => {
+            const scheduled = DB.schedules.find(item => item.day === day && item.time === time);
+            const cls = scheduled && DB.classes.find(item => item.id === scheduled.classId);
+
+            if (scheduled && cls) {
+                html += `
+                    <td class="schedule-cell filled p-2 cursor-pointer hover:bg-red-100" onclick="deleteSchedule(decodeArgument('${encodeArgument(scheduled.id)}'))" title="اضغط للحذف">
+                        <span class="font-bold text-indigo-800 block">${clean(cls.name)}</span>
+                        <span class="delete-schedule text-red-500 font-bold">×</span>
+                    </td>
+                `;
+            } else {
+                html += `<td class="schedule-cell empty text-green-500 text-lg font-bold cursor-pointer hover:bg-green-50 p-2" onclick="addSchedule(decodeArgument('${encodeArgument(day)}'), decodeArgument('${encodeArgument(time)}'))">+</td>`;
+            }
+        });
+        html += '</tr>';
+    });
+    container.innerHTML = html + '</table>';
+}
+
+function renderReports() {
+    const list = document.getElementById('reportsList');
+    list.innerHTML = DB.reports.map(report => {
+        const cls = DB.classes.find(item => item.id === report.classId);
+        const className = cls?.name || report.className || 'صف محذوف';
+        const attendees = Array.isArray(report.attendees) ? report.attendees : [];
+        const absentees = Array.isArray(report.absentees) ? report.absentees : [];
+
+        return `
+            <div class="border p-4 rounded shadow-sm bg-gray-50">
+                <h3 class="font-bold text-lg text-indigo-700">تقرير: ${clean(className)}</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm mt-2 mb-2">
+                    <span><strong>التاريخ:</strong> ${clean(report.date)}</span>
+                    <span><strong>المدة:</strong> ${clean(report.duration)} دقيقة</span>
+                    <span class="col-span-2"><strong>الدرس:</strong> ${clean(report.lesson)}</span>
+                </div>
+                <div class="mt-2">
+                    <strong>الحضور:</strong>
+                    <ul class="list-disc pr-5 text-sm mt-1">
+                        ${attendees.map(item => `<li>${clean(item.name)} - ${clean(item.eval)}</li>`).join('') || '<li>لا يوجد</li>'}
+                    </ul>
+                </div>
+                <div class="mt-2 text-sm text-red-500">
+                    <strong>الغائبون:</strong> ${absentees.map(name => clean(name)).join('، ') || 'لا يوجد'}
+                </div>
+            </div>
+        `;
+    }).join('') || '<p class="text-gray-500 text-center py-4">لا توجد تقارير بعد</p>';
+}
+
+function renderFiles() {
+    const list = document.getElementById('filesList');
+    const colors = {
+        'كتاب': 'bg-blue-100 text-blue-800',
+        'عرض تقديمي': 'bg-purple-100 text-purple-800',
+        'ورقة عمل': 'bg-yellow-100 text-yellow-800',
+        'واجب': 'bg-red-100 text-red-800'
+    };
+
+    list.innerHTML = DB.files.map(file => {
+        const cls = DB.classes.find(item => item.id === file.classId);
+        const safeUrl = validHttpUrl(file.url);
+        const color = colors[file.type] || 'bg-gray-100 text-gray-800';
+
+        const link = safeUrl
+            ? `<a href="${clean(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 text-sm hover:underline">فتح الملف</a>`
+            : '<span class="text-red-600 text-sm">رابط غير صالح</span>';
+
+        return `
+            <div class="border p-4 rounded shadow-sm">
+                <span class="text-xs font-bold px-2 py-1 rounded ${color}">${clean(file.type)}</span>
+                <h4 class="font-bold mt-2">${clean(file.name)}</h4>
+                <p class="text-xs text-gray-500 mb-2">${clean(cls?.name || 'صف محذوف')}</p>
+                ${link}
+            </div>
+        `;
+    }).join('') || '<p class="text-gray-500 text-center py-4">لا توجد ملفات مضافة</p>';
+}
+</script>
+</body>
+</html>
